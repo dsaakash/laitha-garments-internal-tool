@@ -162,7 +162,7 @@ export default function PurchasesPage() {
 
       if (existingItem) {
         // Update existing inventory item - merge sizes and update prices
-        const mergedSizes = [...new Set([...existingItem.sizes, ...sizesArray])]
+        const mergedSizes = Array.from(new Set([...existingItem.sizes, ...sizesArray]))
         storage.updateInventory(existingItem.id, {
           sizes: mergedSizes,
           wholesalePrice: pricePerPiece, // Update to latest purchase price
