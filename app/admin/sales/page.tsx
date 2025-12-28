@@ -29,10 +29,12 @@ export default function SalesPage() {
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     loadSales()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterMonth, filterYear])
 
   const loadData = () => {
@@ -405,7 +407,7 @@ export default function SalesPage() {
                   </div>
                   
                   {formData.items.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No items added. Click "Add Item" to start.</p>
+                    <p className="text-gray-500 text-sm">No items added. Click &quot;Add Item&quot; to start.</p>
                   ) : (
                     <div className="space-y-4">
                       {formData.items.map((item, index) => {

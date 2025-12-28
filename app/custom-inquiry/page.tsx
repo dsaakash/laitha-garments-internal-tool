@@ -70,7 +70,7 @@ Please contact me to discuss further.`
             Custom Order Inquiry
           </h1>
           <p className="text-center text-sage-600 mb-6 sm:mb-8 text-sm sm:text-base px-4">
-            Tell us about your requirements and we'll create something perfect for you
+            Tell us about your requirements and we&apos;ll create something perfect for you
           </p>
 
           {submitted ? (
@@ -80,7 +80,7 @@ Please contact me to discuss further.`
                 Thank You!
               </h2>
               <p className="text-sage-600">
-                We've opened WhatsApp for you. Please send the message to complete your inquiry.
+                We&apos;ve opened WhatsApp for you. Please send the message to complete your inquiry.
               </p>
             </div>
           ) : (
@@ -170,7 +170,7 @@ Please contact me to discuss further.`
               </button>
 
               <p className="text-sm text-sage-600 text-center">
-                * Required fields. We'll contact you on WhatsApp to discuss your requirements in detail.
+                * Required fields. We&apos;ll contact you on WhatsApp to discuss your requirements in detail.
               </p>
             </form>
           )}
@@ -184,19 +184,19 @@ Please contact me to discuss further.`
           <ul className="space-y-2 text-sage-600">
             <li className="flex items-start">
               <span className="text-primary-500 mr-2">•</span>
-              <span>We'll review your requirements and get back to you within 24 hours</span>
+              <span>We&apos;ll review your requirements and get back to you within 24 hours</span>
             </li>
             <li className="flex items-start">
               <span className="text-primary-500 mr-2">•</span>
-              <span>We'll discuss fabric options, design details, and pricing</span>
+              <span>We&apos;ll discuss fabric options, design details, and pricing</span>
             </li>
             <li className="flex items-start">
               <span className="text-primary-500 mr-2">•</span>
-              <span>Once confirmed, we'll start creating your custom piece</span>
+              <span>Once confirmed, we&apos;ll start creating your custom piece</span>
             </li>
             <li className="flex items-start">
               <span className="text-primary-500 mr-2">•</span>
-              <span>We'll keep you updated throughout the process</span>
+              <span>We&apos;ll keep you updated throughout the process</span>
             </li>
           </ul>
         </div>

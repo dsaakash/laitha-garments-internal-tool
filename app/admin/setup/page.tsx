@@ -194,7 +194,7 @@ export default function SetupPage() {
             <div className="mt-8 pt-8 border-t">
               <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
                 <h3 className="text-2xl font-bold text-green-800 mb-2">🎉 Setup Complete!</h3>
-                <p className="text-green-700 mb-4">You're all set to start managing your business</p>
+                <p className="text-green-700 mb-4">You&apos;re all set to start managing your business</p>
                 <button
                   onClick={handleComplete}
                   className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 font-medium"

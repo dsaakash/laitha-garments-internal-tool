@@ -138,10 +138,10 @@ export default function CataloguePage() {
         {/* CTA Section */}
         <div className="mt-12 sm:mt-16 lg:mt-20 text-center professional-card p-6 sm:p-8 lg:p-10 bg-gradient-to-br from-cream-50/95 to-white/95 backdrop-blur-sm mx-4 sm:mx-0">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-sage-800 mb-3 sm:mb-4 font-semibold px-4">
-            Don't see what you're looking for?
+            Don&apos;t see what you&apos;re looking for?
           </h2>
           <p className="text-sage-600 mb-6 sm:mb-8 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed px-4">
-            We can create a custom piece just for you. Share your requirements and we'll make it happen.
+            We can create a custom piece just for you. Share your requirements and we&apos;ll make it happen.
           </p>
           <Link
             href="/custom-inquiry"

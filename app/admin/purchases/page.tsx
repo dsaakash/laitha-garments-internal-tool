@@ -31,10 +31,12 @@ export default function PurchasesPage() {
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     loadOrders()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSupplier, filterMonth, filterYear])
 
   const loadData = () => {
