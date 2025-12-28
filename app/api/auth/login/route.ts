@@ -1,25 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const ADMIN_EMAIL = 'savantaakash322@gmail.com'
-const ADMIN_PASSWORD = 'Aakash@9353'
+import { verifyAdmin } from '@/lib/db-auth'
+import { encodeBase64, getNodeEnv } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
 
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    if (!email || !password) {
+      return NextResponse.json(
+        { success: false, message: 'Email and password are required' },
+        { status: 400 }
+      )
+    }
+
+    const admin = await verifyAdmin(email, password)
+
+    if (admin) {
       // Create a simple session token (in production, use proper JWT)
-      const sessionToken = Buffer.from(`${email}:${Date.now()}`).toString('base64')
+      const sessionToken = encodeBase64(`${admin.id}:${email}:${Date.now()}`)
       
       const response = NextResponse.json({ 
         success: true, 
-        message: 'Login successful' 
+        message: 'Login successful',
+        admin: {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name
+        }
       })
       
       // Set cookie for session
       response.cookies.set('admin_session', sessionToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: getNodeEnv() === 'production',
         sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 7 // 7 days
       })
@@ -32,10 +45,10 @@ export async function POST(request: NextRequest) {
       { status: 401 }
     )
   } catch (error) {
+    console.error('Login error:', error)
     return NextResponse.json(
       { success: false, message: 'Server error' },
       { status: 500 }
     )
   }
 }
-
