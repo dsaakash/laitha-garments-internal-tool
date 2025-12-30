@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/AdminLayout'
-import { storage } from '@/lib/storage'
 
 export default function SetupPage() {
   const router = useRouter()
@@ -14,35 +13,49 @@ export default function SetupPage() {
     checkCompletedSteps()
   }, [])
 
-  const checkCompletedSteps = () => {
-    const steps: number[] = []
-    const profile = storage.getBusinessProfile()
-    const suppliers = storage.getSuppliers()
-    const purchaseOrders = storage.getPurchaseOrders()
-    const inventory = storage.getInventory()
-    const customers = storage.getCustomers()
-    const catalogues = storage.getCatalogues()
-    const sales = storage.getSales()
+  const checkCompletedSteps = async () => {
+    try {
+      const [profileRes, suppliersRes, purchasesRes, inventoryRes, customersRes, cataloguesRes, salesRes] = await Promise.all([
+        fetch('/api/business'),
+        fetch('/api/suppliers'),
+        fetch('/api/purchases'),
+        fetch('/api/inventory'),
+        fetch('/api/customers'),
+        fetch('/api/catalogues'),
+        fetch('/api/sales'),
+      ])
+      
+      const profile = profileRes.ok ? (await profileRes.json()).data : null
+      const suppliers = suppliersRes.ok ? (await suppliersRes.json()).data : []
+      const purchaseOrders = purchasesRes.ok ? (await purchasesRes.json()).data : []
+      const inventory = inventoryRes.ok ? (await inventoryRes.json()).data : []
+      const customers = customersRes.ok ? (await customersRes.json()).data : []
+      const catalogues = cataloguesRes.ok ? (await cataloguesRes.json()).data : []
+      const sales = salesRes.ok ? (await salesRes.json()).data : []
 
-    if (profile) steps.push(1)
-    if (suppliers.length > 0) steps.push(2)
-    if (purchaseOrders.length > 0) steps.push(3)
-    if (inventory.length > 0) steps.push(4)
-    if (customers.length > 0) steps.push(5)
-    if (catalogues.length > 0) steps.push(6)
-    if (sales.length > 0) steps.push(7)
+      const steps: number[] = []
+      if (profile) steps.push(1)
+      if (suppliers.length > 0) steps.push(2)
+      if (purchaseOrders.length > 0) steps.push(3)
+      if (inventory.length > 0) steps.push(4)
+      if (customers.length > 0) steps.push(5)
+      if (catalogues.length > 0) steps.push(6)
+      if (sales.length > 0) steps.push(7)
 
-    setCompletedSteps(steps)
-    
-    // Auto-advance to first incomplete step
-    if (!profile) setCurrentStep(1)
-    else if (suppliers.length === 0) setCurrentStep(2)
-    else if (purchaseOrders.length === 0) setCurrentStep(3)
-    else if (inventory.length === 0) setCurrentStep(4)
-    else if (customers.length === 0) setCurrentStep(5)
-    else if (catalogues.length === 0) setCurrentStep(6)
-    else if (sales.length === 0) setCurrentStep(7)
-    else setCurrentStep(8) // All done
+      setCompletedSteps(steps)
+      
+      // Auto-advance to first incomplete step
+      if (!profile) setCurrentStep(1)
+      else if (suppliers.length === 0) setCurrentStep(2)
+      else if (purchaseOrders.length === 0) setCurrentStep(3)
+      else if (inventory.length === 0) setCurrentStep(4)
+      else if (customers.length === 0) setCurrentStep(5)
+      else if (catalogues.length === 0) setCurrentStep(6)
+      else if (sales.length === 0) setCurrentStep(7)
+      else setCurrentStep(8) // All done
+    } catch (error) {
+      console.error('Failed to check completed steps:', error)
+    }
   }
 
   const steps = [

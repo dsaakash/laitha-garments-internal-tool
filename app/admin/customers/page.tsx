@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, Customer } from '@/lib/storage'
+import { Customer } from '@/lib/storage'
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -19,22 +19,53 @@ export default function CustomersPage() {
     loadCustomers()
   }, [])
 
-  const loadCustomers = () => {
-    setCustomers(storage.getCustomers())
+  const loadCustomers = async () => {
+    try {
+      const response = await fetch('/api/customers')
+      const result = await response.json()
+      if (result.success) {
+        setCustomers(result.data)
+      }
+    } catch (error) {
+      console.error('Failed to load customers:', error)
+    }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (editingCustomer) {
-      storage.updateCustomer(editingCustomer.id, formData)
-    } else {
-      storage.addCustomer(formData)
+    try {
+      if (editingCustomer) {
+        const response = await fetch(`/api/customers/${editingCustomer.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to update customer')
+          return
+        }
+      } else {
+        const response = await fetch('/api/customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to add customer')
+          return
+        }
+      }
+      
+      resetForm()
+      await loadCustomers()
+      setShowModal(false)
+    } catch (error) {
+      console.error('Failed to save customer:', error)
+      alert('Failed to save customer')
     }
-    
-    resetForm()
-    loadCustomers()
-    setShowModal(false)
   }
 
   const handleEdit = (customer: Customer) => {
@@ -48,10 +79,22 @@ export default function CustomersPage() {
     setShowModal(true)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this customer?')) {
-      storage.deleteCustomer(id)
-      loadCustomers()
+      try {
+        const response = await fetch(`/api/customers/${id}`, {
+          method: 'DELETE',
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to delete customer')
+          return
+        }
+        await loadCustomers()
+      } catch (error) {
+        console.error('Failed to delete customer:', error)
+        alert('Failed to delete customer')
+      }
     }
   }
 
@@ -113,7 +156,7 @@ export default function CustomersPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => handleEdit(customer)}
-                        className="text-blue-600 hover:text-blue-900 mr-4"
+                        className="text-purple-600 hover:text-purple-900 mr-4"
                       >
                         Edit
                       </button>
@@ -131,10 +174,9 @@ export default function CustomersPage() {
           </div>
         )}
 
-        {/* Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4">
+            <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
               <h2 className="text-2xl font-bold mb-6">
                 {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
               </h2>
@@ -160,7 +202,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
                     value={formData.email}
@@ -169,28 +211,28 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                   <textarea
-                    rows={3}
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
-                <div className="flex justify-end space-x-4 pt-4">
+                <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
                     onClick={() => {
-                      setShowModal(false)
                       resetForm()
+                      setShowModal(false)
                     }}
-                    className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
                   >
                     {editingCustomer ? 'Update' : 'Add'} Customer
                   </button>
@@ -203,4 +245,3 @@ export default function CustomersPage() {
     </AdminLayout>
   )
 }
-

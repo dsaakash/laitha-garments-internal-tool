@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, Sale, SaleItem } from '@/lib/storage'
+import { Sale, SaleItem } from '@/lib/storage'
 import { format } from 'date-fns'
 import Link from 'next/link'
 
@@ -30,67 +30,81 @@ export default function Dashboard() {
   const [soldItems, setSoldItems] = useState<SoldItem[]>([])
 
   useEffect(() => {
-    const inventory = storage.getInventory()
-    const sales = storage.getSales()
-    
-    const totalRevenue = sales.reduce((sum, sale) => sum + sale.totalAmount, 0)
-    const totalProfit = sales.reduce((sum, sale) => {
-      const saleProfit = sale.items.reduce((itemSum, item) => itemSum + item.profit, 0)
-      return sum + saleProfit
-    }, 0)
+    const loadData = async () => {
+      try {
+        const [inventoryRes, salesRes] = await Promise.all([
+          fetch('/api/inventory'),
+          fetch('/api/sales'),
+        ])
+        const inventoryResult = await inventoryRes.json()
+        const salesResult = await salesRes.json()
+        
+        const inventory = inventoryResult.success ? inventoryResult.data : []
+        const sales = salesResult.success ? salesResult.data : []
+        
+        const totalRevenue = sales.reduce((sum: number, sale: Sale) => sum + sale.totalAmount, 0)
+        const totalProfit = sales.reduce((sum: number, sale: Sale) => {
+          const saleProfit = sale.items.reduce((itemSum: number, item: SaleItem) => itemSum + item.profit, 0)
+          return sum + saleProfit
+        }, 0)
 
-    const now = new Date()
-    const thisMonthSales = sales.filter(sale => {
-      const saleDate = new Date(sale.date)
-      return saleDate.getMonth() === now.getMonth() && 
-             saleDate.getFullYear() === now.getFullYear()
-    })
-    const thisMonthRevenue = thisMonthSales.reduce((sum, sale) => sum + sale.totalAmount, 0)
+        const now = new Date()
+        const thisMonthSales = sales.filter((sale: Sale) => {
+          const saleDate = new Date(sale.date)
+          return saleDate.getMonth() === now.getMonth() && 
+                 saleDate.getFullYear() === now.getFullYear()
+        })
+        const thisMonthRevenue = thisMonthSales.reduce((sum: number, sale: Sale) => sum + sale.totalAmount, 0)
 
-    // Get recent sales (last 5)
-    const recent = sales
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5)
+        // Get recent sales (last 5)
+        const recent = sales
+          .sort((a: Sale, b: Sale) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 5)
 
-    // Aggregate sold items with profit
-    const itemsMap = new Map<string, SoldItem>()
-    sales.forEach(sale => {
-      sale.items.forEach(item => {
-        const key = `${item.dressCode}-${item.dressName}`
-        if (itemsMap.has(key)) {
-          const existing = itemsMap.get(key)!
-          existing.quantity += item.quantity
-          existing.totalProfit += item.profit
-          existing.totalRevenue += item.sellingPrice * item.quantity
-        } else {
-          itemsMap.set(key, {
-            dressName: item.dressName,
-            dressType: item.dressType,
-            dressCode: item.dressCode,
-            quantity: item.quantity,
-            totalProfit: item.profit,
-            totalRevenue: item.sellingPrice * item.quantity,
-            customerName: sale.partyName,
-            saleDate: sale.date,
+        // Aggregate sold items with profit
+        const itemsMap = new Map<string, SoldItem>()
+        sales.forEach((sale: Sale) => {
+          sale.items.forEach((item: SaleItem) => {
+            const key = `${item.dressCode}-${item.dressName}`
+            if (itemsMap.has(key)) {
+              const existing = itemsMap.get(key)!
+              existing.quantity += item.quantity
+              existing.totalProfit += item.profit
+              existing.totalRevenue += item.sellingPrice * item.quantity
+            } else {
+              itemsMap.set(key, {
+                dressName: item.dressName,
+                dressType: item.dressType,
+                dressCode: item.dressCode,
+                quantity: item.quantity,
+                totalProfit: item.profit,
+                totalRevenue: item.sellingPrice * item.quantity,
+                customerName: sale.partyName,
+                saleDate: sale.date,
+              })
+            }
           })
-        }
-      })
-    })
+        })
 
-    const soldItemsList = Array.from(itemsMap.values())
-      .sort((a, b) => b.totalProfit - a.totalProfit)
-      .slice(0, 10) // Top 10 by profit
+        const soldItemsList = Array.from(itemsMap.values())
+          .sort((a, b) => b.totalProfit - a.totalProfit)
+          .slice(0, 10) // Top 10 by profit
 
-    setStats({
-      totalInventory: inventory.length,
-      totalSales: sales.length,
-      totalRevenue,
-      totalProfit,
-      thisMonthSales: thisMonthSales.length,
-      thisMonthRevenue,
-    })
-    setRecentSales(recent)
-    setSoldItems(soldItemsList)
+        setStats({
+          totalInventory: inventory.length,
+          totalSales: sales.length,
+          totalRevenue,
+          totalProfit,
+          thisMonthSales: thisMonthSales.length,
+          thisMonthRevenue,
+        })
+        setRecentSales(recent)
+        setSoldItems(soldItemsList)
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error)
+      }
+    }
+    loadData()
   }, [])
 
   const statCards = [

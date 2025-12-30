@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, Sale, BusinessProfile, Customer } from '@/lib/storage'
+import { Sale, BusinessProfile, Customer } from '@/lib/storage'
 import { format } from 'date-fns'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
@@ -27,12 +27,31 @@ export default function InvoicesPage() {
     loadData()
   }, [])
 
-  const loadData = () => {
-    const allSales = storage.getSales()
-    allSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    setSales(allSales)
-    setBusinessProfile(storage.getBusinessProfile())
-    setCustomers(storage.getCustomers())
+  const loadData = async () => {
+    try {
+      const [salesRes, businessRes, customersRes] = await Promise.all([
+        fetch('/api/sales'),
+        fetch('/api/business'),
+        fetch('/api/customers'),
+      ])
+      const salesResult = await salesRes.json()
+      const businessResult = await businessRes.json()
+      const customersResult = await customersRes.json()
+      
+      if (salesResult.success) {
+        const allSales = salesResult.data
+        allSales.sort((a: Sale, b: Sale) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        setSales(allSales)
+      }
+      if (businessResult.success && businessResult.data) {
+        setBusinessProfile(businessResult.data)
+      }
+      if (customersResult.success) {
+        setCustomers(customersResult.data)
+      }
+    } catch (error) {
+      console.error('Failed to load data:', error)
+    }
   }
 
   const getCustomer = (sale: Sale): Customer | null => {

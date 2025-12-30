@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, InventoryItem } from '@/lib/storage'
+import { InventoryItem } from '@/lib/storage'
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
@@ -30,48 +30,79 @@ export default function InventoryPage() {
     loadItems()
   }, [])
 
-  const loadItems = () => {
-    setItems(storage.getInventory())
+  const loadItems = async () => {
+    try {
+      const response = await fetch('/api/inventory')
+      const result = await response.json()
+      if (result.success) {
+        setItems(result.data)
+      }
+    } catch (error) {
+      console.error('Failed to load inventory:', error)
+    }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     const sizesArray = formData.sizes.split(',').map(s => s.trim()).filter(Boolean)
     
-    if (editingItem) {
-      storage.updateInventory(editingItem.id, {
-        dressName: formData.dressName,
-        dressType: formData.dressType,
-        dressCode: formData.dressCode,
-        sizes: sizesArray,
-        fabricType: formData.fabricType || undefined,
-        wholesalePrice: parseFloat(formData.wholesalePrice),
-        sellingPrice: parseFloat(formData.sellingPrice),
-        imageUrl: formData.imageUrl || undefined,
-        supplierName: formData.supplierName || undefined,
-        supplierAddress: formData.supplierAddress || undefined,
-        supplierPhone: formData.supplierPhone || undefined,
-      })
-    } else {
-      storage.addInventory({
-        dressName: formData.dressName,
-        dressType: formData.dressType,
-        dressCode: formData.dressCode,
-        sizes: sizesArray,
-        fabricType: formData.fabricType || undefined,
-        wholesalePrice: parseFloat(formData.wholesalePrice),
-        sellingPrice: parseFloat(formData.sellingPrice),
-        imageUrl: formData.imageUrl || undefined,
-        supplierName: formData.supplierName || undefined,
-        supplierAddress: formData.supplierAddress || undefined,
-        supplierPhone: formData.supplierPhone || undefined,
-      })
+    try {
+      if (editingItem) {
+        const response = await fetch(`/api/inventory/${editingItem.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dressName: formData.dressName,
+            dressType: formData.dressType,
+            dressCode: formData.dressCode,
+            sizes: sizesArray,
+            fabricType: formData.fabricType || undefined,
+            wholesalePrice: parseFloat(formData.wholesalePrice),
+            sellingPrice: parseFloat(formData.sellingPrice),
+            imageUrl: formData.imageUrl || undefined,
+            supplierName: formData.supplierName || undefined,
+            supplierAddress: formData.supplierAddress || undefined,
+            supplierPhone: formData.supplierPhone || undefined,
+          }),
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to update item')
+          return
+        }
+      } else {
+        const response = await fetch('/api/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dressName: formData.dressName,
+            dressType: formData.dressType,
+            dressCode: formData.dressCode,
+            sizes: sizesArray,
+            fabricType: formData.fabricType || undefined,
+            wholesalePrice: parseFloat(formData.wholesalePrice),
+            sellingPrice: parseFloat(formData.sellingPrice),
+            imageUrl: formData.imageUrl || undefined,
+            supplierName: formData.supplierName || undefined,
+            supplierAddress: formData.supplierAddress || undefined,
+            supplierPhone: formData.supplierPhone || undefined,
+          }),
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to add item')
+          return
+        }
+      }
+      
+      resetForm()
+      await loadItems()
+      setShowModal(false)
+    } catch (error) {
+      console.error('Failed to save item:', error)
+      alert('Failed to save item')
     }
-    
-    resetForm()
-    loadItems()
-    setShowModal(false)
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,10 +164,22 @@ export default function InventoryPage() {
     setShowModal(true)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this item?')) {
-      storage.deleteInventory(id)
-      loadItems()
+      try {
+        const response = await fetch(`/api/inventory/${id}`, {
+          method: 'DELETE',
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to delete item')
+          return
+        }
+        await loadItems()
+      } catch (error) {
+        console.error('Failed to delete item:', error)
+        alert('Failed to delete item')
+      }
     }
   }
 

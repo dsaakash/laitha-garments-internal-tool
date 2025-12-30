@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, PurchaseOrder, Supplier, InventoryItem } from '@/lib/storage'
+import { PurchaseOrder, Supplier } from '@/lib/storage'
 import { format } from 'date-fns'
 
 export default function PurchasesPage() {
@@ -39,34 +39,50 @@ export default function PurchasesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSupplier, filterMonth, filterYear])
 
-  const loadData = () => {
-    setSuppliers(storage.getSuppliers())
-    loadOrders()
+  const loadData = async () => {
+    try {
+      const response = await fetch('/api/suppliers')
+      const result = await response.json()
+      if (result.success) {
+        setSuppliers(result.data)
+      }
+      await loadOrders()
+    } catch (error) {
+      console.error('Failed to load suppliers:', error)
+    }
   }
 
-  const loadOrders = () => {
-    let allOrders = storage.getPurchaseOrders()
-    
-    if (filterSupplier) {
-      allOrders = allOrders.filter(order => order.supplierId === filterSupplier)
+  const loadOrders = async () => {
+    try {
+      const response = await fetch('/api/purchases')
+      const result = await response.json()
+      if (result.success) {
+        let allOrders = result.data
+        
+        if (filterSupplier) {
+          allOrders = allOrders.filter((order: PurchaseOrder) => order.supplierId === filterSupplier)
+        }
+        
+        if (filterYear) {
+          allOrders = allOrders.filter((order: PurchaseOrder) => {
+            const orderYear = new Date(order.date).getFullYear().toString()
+            return orderYear === filterYear
+          })
+        }
+        
+        if (filterMonth) {
+          allOrders = allOrders.filter((order: PurchaseOrder) => {
+            const orderMonth = (new Date(order.date).getMonth() + 1).toString().padStart(2, '0')
+            return orderMonth === filterMonth
+          })
+        }
+        
+        allOrders.sort((a: PurchaseOrder, b: PurchaseOrder) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        setOrders(allOrders)
+      }
+    } catch (error) {
+      console.error('Failed to load purchase orders:', error)
     }
-    
-    if (filterYear) {
-      allOrders = allOrders.filter(order => {
-        const orderYear = new Date(order.date).getFullYear().toString()
-        return orderYear === filterYear
-      })
-    }
-    
-    if (filterMonth) {
-      allOrders = allOrders.filter(order => {
-        const orderMonth = (new Date(order.date).getMonth() + 1).toString().padStart(2, '0')
-        return orderMonth === filterMonth
-      })
-    }
-    
-    allOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    setOrders(allOrders)
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,7 +123,7 @@ export default function PurchasesPage() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     const supplier = suppliers.find(s => s.id === formData.supplierId)
@@ -126,76 +142,46 @@ export default function PurchasesPage() {
       return
     }
 
-    if (editingOrder) {
-      storage.updatePurchaseOrder(editingOrder.id, {
-        date: formData.date,
-        supplierId: formData.supplierId,
-        supplierName: supplier.name,
-        productName: formData.productName,
-        productImage: formData.productImage || undefined,
-        sizes: sizesArray,
-        quantity,
-        pricePerPiece,
-        totalAmount,
-        notes: formData.notes || undefined,
-      })
-    } else {
-      const newOrder = storage.addPurchaseOrder({
-        date: formData.date,
-        supplierId: formData.supplierId,
-        supplierName: supplier.name,
-        productName: formData.productName,
-        productImage: formData.productImage || undefined,
-        sizes: sizesArray,
-        quantity,
-        pricePerPiece,
-        totalAmount,
-        notes: formData.notes || undefined,
-      })
-
-      // Automatically add to inventory
-      const existingInventory = storage.getInventory()
-      const existingItem = existingInventory.find(
-        item => item.dressName.toLowerCase() === formData.productName.toLowerCase() &&
-                item.dressCode === `PO-${newOrder.id.substring(0, 6)}`
-      )
-
-      if (existingItem) {
-        // Update existing inventory item - merge sizes and update prices
-        const mergedSizes = Array.from(new Set([...existingItem.sizes, ...sizesArray]))
-        storage.updateInventory(existingItem.id, {
-          sizes: mergedSizes,
-          wholesalePrice: pricePerPiece, // Update to latest purchase price
-          sellingPrice: pricePerPiece * 2, // 2x markup as requested
-          fabricType: formData.fabricType || existingItem.fabricType,
-          supplierName: supplier.name,
-          supplierPhone: supplier.phone,
-          supplierAddress: supplier.address,
+    try {
+      // Note: Purchase orders are create-only, no update functionality in API
+      if (!editingOrder) {
+        const response = await fetch('/api/purchases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: formData.date,
+            supplierId: formData.supplierId,
+            supplierName: supplier.name,
+            productName: formData.productName,
+            productImage: formData.productImage || undefined,
+            sizes: sizesArray,
+            fabricType: formData.fabricType || undefined,
+            quantity,
+            pricePerPiece,
+            totalAmount,
+            notes: formData.notes || undefined,
+          }),
         })
-        alert(`Purchase order added! Updated existing inventory item: ${formData.productName}`)
+        
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to add purchase order')
+          return
+        }
+        
+        alert(`Purchase order added! Inventory updated automatically.`)
       } else {
-        // Create new inventory item
-        const dressCode = `PO-${newOrder.id.substring(0, 6)}`
-        storage.addInventory({
-          dressName: formData.productName,
-          dressType: 'Purchase Order Item',
-          dressCode: dressCode,
-          sizes: sizesArray,
-          wholesalePrice: pricePerPiece,
-          sellingPrice: pricePerPiece * 2, // 2x markup as requested
-          imageUrl: formData.productImage || undefined,
-          fabricType: formData.fabricType || undefined,
-          supplierName: supplier.name,
-          supplierPhone: supplier.phone,
-          supplierAddress: supplier.address,
-        })
-        alert(`Purchase order added! New inventory item created: ${formData.productName} with ${sizesArray.length} size(s)`)
+        alert('Purchase order editing not yet implemented in API')
+        return
       }
+      
+      resetForm()
+      await loadOrders()
+      setShowModal(false)
+    } catch (error) {
+      console.error('Failed to save purchase order:', error)
+      alert('Failed to save purchase order')
     }
-    
-    resetForm()
-    loadOrders()
-    setShowModal(false)
   }
 
   const handleEdit = (order: PurchaseOrder) => {
@@ -220,10 +206,10 @@ export default function PurchasesPage() {
     setShowDetailModal(true)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this purchase order?')) {
-      storage.deletePurchaseOrder(id)
-      loadOrders()
+      // Note: Delete functionality not yet implemented in API
+      alert('Purchase order deletion not yet implemented in API')
     }
   }
 

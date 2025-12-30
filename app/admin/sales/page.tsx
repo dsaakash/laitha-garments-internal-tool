@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, Sale, InventoryItem, Customer } from '@/lib/storage'
+import { Sale, InventoryItem, Customer } from '@/lib/storage'
 import { format } from 'date-fns'
 
 export default function SalesPage() {
@@ -37,32 +37,40 @@ export default function SalesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterMonth, filterYear])
 
-  const loadData = () => {
-    setInventory(storage.getInventory())
-    setCustomers(storage.getCustomers())
-    loadSales()
+  const loadData = async () => {
+    try {
+      const [inventoryRes, customersRes] = await Promise.all([
+        fetch('/api/inventory'),
+        fetch('/api/customers'),
+      ])
+      const inventoryResult = await inventoryRes.json()
+      const customersResult = await customersRes.json()
+      if (inventoryResult.success) {
+        setInventory(inventoryResult.data)
+      }
+      if (customersResult.success) {
+        setCustomers(customersResult.data)
+      }
+      await loadSales()
+    } catch (error) {
+      console.error('Failed to load data:', error)
+    }
   }
 
-  const loadSales = () => {
-    let allSales = storage.getSales()
-    
-    if (filterYear) {
-      allSales = allSales.filter(sale => {
-        const saleYear = new Date(sale.date).getFullYear().toString()
-        return saleYear === filterYear
-      })
+  const loadSales = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (filterYear) params.append('year', filterYear)
+      if (filterMonth) params.append('month', filterMonth)
+      
+      const response = await fetch(`/api/sales?${params.toString()}`)
+      const result = await response.json()
+      if (result.success) {
+        setSales(result.data)
+      }
+    } catch (error) {
+      console.error('Failed to load sales:', error)
     }
-    
-    if (filterMonth) {
-      allSales = allSales.filter(sale => {
-        const saleMonth = (new Date(sale.date).getMonth() + 1).toString().padStart(2, '0')
-        return saleMonth === filterMonth
-      })
-    }
-    
-    // Sort by date descending
-    allSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    setSales(allSales)
   }
 
   const handleAddItem = () => {
@@ -85,46 +93,61 @@ export default function SalesPage() {
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    const saleItems = formData.items.map(itemForm => {
-      const invItem = inventory.find(i => i.id === itemForm.inventoryId)
-      if (!invItem) throw new Error('Inventory item not found')
+    try {
+      const saleItems = formData.items.map(itemForm => {
+        const invItem = inventory.find(i => i.id === itemForm.inventoryId)
+        if (!invItem) throw new Error('Inventory item not found')
+        
+        const purchasePrice = invItem.wholesalePrice
+        const sellingPrice = invItem.sellingPrice
+        const profit = (sellingPrice - purchasePrice) * itemForm.quantity
+        
+        return {
+          inventoryId: itemForm.inventoryId,
+          dressName: invItem.dressName,
+          dressType: invItem.dressType,
+          dressCode: invItem.dressCode,
+          size: itemForm.size,
+          quantity: itemForm.quantity,
+          purchasePrice,
+          sellingPrice,
+          profit,
+        }
+      })
       
-      const purchasePrice = invItem.wholesalePrice
-      const sellingPrice = invItem.sellingPrice
-      const profit = (sellingPrice - purchasePrice) * itemForm.quantity
+      const totalAmount = saleItems.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0)
       
-      return {
-        inventoryId: itemForm.inventoryId,
-        dressName: invItem.dressName,
-        dressType: invItem.dressType,
-        dressCode: invItem.dressCode,
-        size: itemForm.size,
-        quantity: itemForm.quantity,
-        purchasePrice,
-        sellingPrice,
-        profit,
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: formData.date,
+          partyName: formData.partyName,
+          customerId: useCustomer && formData.customerId ? formData.customerId : undefined,
+          billNumber: formData.billNumber,
+          items: saleItems,
+          totalAmount,
+          paymentMode: formData.paymentMode,
+          upiTransactionId: formData.upiTransactionId || undefined,
+        }),
+      })
+      
+      const result = await response.json()
+      if (!result.success) {
+        alert('Failed to add sale')
+        return
       }
-    })
-    
-    const totalAmount = saleItems.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0)
-    
-    storage.addSale({
-      date: formData.date,
-      partyName: formData.partyName,
-      customerId: useCustomer && formData.customerId ? formData.customerId : undefined,
-      billNumber: formData.billNumber,
-      items: saleItems,
-      totalAmount,
-      paymentMode: formData.paymentMode,
-      upiTransactionId: formData.upiTransactionId || undefined,
-    })
-    
-    resetForm()
-    loadSales()
-    setShowModal(false)
+      
+      resetForm()
+      await loadSales()
+      setShowModal(false)
+    } catch (error) {
+      console.error('Failed to save sale:', error)
+      alert('Failed to save sale')
+    }
   }
 
   const resetForm = () => {

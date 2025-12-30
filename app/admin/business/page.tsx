@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { storage, BusinessProfile } from '@/lib/storage'
+import { BusinessProfile } from '@/lib/storage'
 
 export default function BusinessPage() {
   const [formData, setFormData] = useState<BusinessProfile>({
@@ -15,19 +15,53 @@ export default function BusinessPage() {
     whatsappNumber: '',
   })
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const profile = storage.getBusinessProfile()
-    if (profile) {
-      setFormData(profile)
+    // Fetch existing business profile from API
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch('/api/business')
+        const result = await response.json()
+        if (result.success && result.data) {
+          setFormData(result.data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch business profile:', err)
+      }
     }
+    fetchProfile()
   }, [])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    storage.updateBusinessProfile(formData)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/business', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      })
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      } else {
+        setError(result.message || 'Failed to save business profile')
+      }
+    } catch (err) {
+      console.error('Save error:', err)
+      setError('Failed to save business profile. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -38,6 +72,12 @@ export default function BusinessPage() {
         {saved && (
           <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-6">
             Business profile saved successfully!
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            {error}
           </div>
         )}
 
@@ -127,9 +167,10 @@ export default function BusinessPage() {
             <div className="flex justify-end pt-4">
               <button
                 type="submit"
-                className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                disabled={loading}
+                className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Save Business Profile
+                {loading ? 'Saving...' : 'Save Business Profile'}
               </button>
             </div>
           </form>
@@ -138,4 +179,3 @@ export default function BusinessPage() {
     </AdminLayout>
   )
 }
-
