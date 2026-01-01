@@ -124,7 +124,7 @@ export default function CataloguePage() {
           </div>
         ) : filteredItems.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10 px-4 sm:px-0">
-            {filteredItems.map((item) => (
+            {filteredItems.map((item, index) => (
               <div
                 key={item.id}
                 className="group bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 animate-fade-in"
@@ -137,7 +137,7 @@ export default function CataloguePage() {
                     fill
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    priority={item.id <= 2}
+                    priority={index < 3}
                   />
                   {/* Category Badge Overlay */}
                   <div className="absolute top-4 left-4 z-10">
