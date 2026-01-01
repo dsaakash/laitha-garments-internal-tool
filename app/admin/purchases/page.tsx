@@ -143,8 +143,8 @@ export default function PurchasesPage() {
     }
 
     try {
-      // Note: Purchase orders are create-only, no update functionality in API
       if (!editingOrder) {
+        // Create new purchase order
         const response = await fetch('/api/purchases', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -171,8 +171,32 @@ export default function PurchasesPage() {
         
         alert(`Purchase order added! Inventory updated automatically.`)
       } else {
-        alert('Purchase order editing not yet implemented in API')
-        return
+        // Update existing purchase order
+        const response = await fetch(`/api/purchases/${editingOrder.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: formData.date,
+            supplierId: formData.supplierId,
+            supplierName: supplier.name,
+            productName: formData.productName,
+            productImage: formData.productImage || undefined,
+            sizes: sizesArray,
+            fabricType: formData.fabricType || undefined,
+            quantity,
+            pricePerPiece,
+            totalAmount,
+            notes: formData.notes || undefined,
+          }),
+        })
+        
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to update purchase order')
+          return
+        }
+        
+        alert(`Purchase order updated! Inventory updated automatically.`)
       }
       
       resetForm()
