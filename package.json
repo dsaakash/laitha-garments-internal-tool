@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "init-db": "node scripts/init-db.js",
-    "add-admin": "node scripts/add-admin.js"
+    "add-admin": "node scripts/add-admin.js",
+    "add-collection": "node scripts/add-collection-items.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

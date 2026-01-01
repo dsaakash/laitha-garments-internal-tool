@@ -1,34 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import PalaceBackground from './PalaceBackground'
 
-// Catalogue data - using the two dress images
-const catalogueItems = [
-  {
-    id: 1,
-    name: 'Elegant Green Kurta Set',
-    category: 'Kurtis',
-    image: '/dress1.png',
-    description: 'Beautiful lime green kurta with matching pants, perfect for daily wear',
-    price: 'Custom Pricing',
-  },
-  {
-    id: 2,
-    name: 'Traditional Yellow Saree',
-    category: 'Sarees',
-    image: '/dress2.png',
-    description: 'Vibrant yellow saree with pink floral motifs and palm tree border design',
-    price: 'Custom Pricing',
-  },
-]
+interface CatalogueItem {
+  id: string
+  name: string
+  category: string
+  image: string
+  description: string
+  price: string
+}
 
 const categories = ['All', 'Kurtis', 'Dresses', 'Sarees']
 
+// Map dress types to categories
+const getCategory = (dressType: string): string => {
+  const type = dressType.toLowerCase()
+  if (type.includes('kurta') || type.includes('kurti')) return 'Kurtis'
+  if (type.includes('dress') || type.includes('anarkali')) return 'Dresses'
+  if (type.includes('saree') || type.includes('sari')) return 'Sarees'
+  return 'Kurtis' // default
+}
+
 export default function CataloguePage() {
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const [catalogueItems, setCatalogueItems] = useState<CatalogueItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadCatalogueItems()
+  }, [])
+
+  const loadCatalogueItems = async () => {
+    try {
+      const response = await fetch('/api/inventory')
+      const result = await response.json()
+      if (result.success) {
+        const items: CatalogueItem[] = result.data.map((item: any) => ({
+          id: item.id,
+          name: item.dressName,
+          category: getCategory(item.dressType),
+          image: item.imageUrl || '/dress1.png',
+          description: `${item.dressType} - ${item.dressCode || ''}`,
+          price: 'Custom Pricing',
+        }))
+        setCatalogueItems(items)
+      }
+    } catch (error) {
+      console.error('Failed to load catalogue items:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredItems =
     selectedCategory === 'All'
@@ -92,36 +118,54 @@ export default function CataloguePage() {
         </div>
 
         {/* Catalogue Grid */}
-        {filteredItems.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 px-4 sm:px-0">
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-sage-600 text-lg">Loading collection...</p>
+          </div>
+        ) : filteredItems.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10 px-4 sm:px-0">
             {filteredItems.map((item) => (
               <div
                 key={item.id}
-                className="professional-card overflow-hidden group animate-fade-in"
+                className="group bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 animate-fade-in"
               >
-                <div className="image-container aspect-[3/4] relative overflow-hidden">
+                {/* Image Container - Full Coverage */}
+                <div className="relative w-full h-[450px] sm:h-[500px] overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
                   <Image
                     src={item.image}
                     alt={item.name}
                     fill
-                    className="object-contain p-3 sm:p-4"
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     priority={item.id <= 2}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                </div>
-                <div className="p-5 sm:p-6 bg-white">
-                  <div className="mb-3">
-                    <span className="inline-block bg-primary-100 text-primary-700 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase">
+                  {/* Category Badge Overlay */}
+                  <div className="absolute top-4 left-4 z-10">
+                    <span className="bg-white/95 backdrop-blur-sm text-primary-700 px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase shadow-md">
                       {item.category}
                     </span>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-serif text-sage-800 mb-2 sm:mb-3 font-semibold leading-tight">{item.name}</h3>
-                  <p className="text-sage-600 mb-4 text-xs sm:text-sm leading-relaxed line-clamp-2">{item.description}</p>
-                  <p className="text-primary-600 font-bold mb-4 sm:mb-5 text-base sm:text-lg">{item.price}</p>
+                  {/* Gradient Overlay on Hover */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                </div>
+                
+                {/* Content Section */}
+                <div className="p-6 sm:p-7 bg-white">
+                  <h3 className="text-2xl sm:text-2xl font-serif text-gray-900 mb-2 font-bold leading-tight line-clamp-2">
+                    {item.name}
+                  </h3>
+                  <p className="text-gray-500 mb-1 text-sm font-medium">
+                    {item.description}
+                  </p>
+                  <div className="flex items-center justify-between mt-4 mb-5 pt-4 border-t border-gray-100">
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Price</p>
+                      <p className="text-primary-600 font-bold text-lg">{item.price}</p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => handleWhatsApp(item.name)}
-                    className="w-full bg-primary-500 hover:bg-primary-600 text-white py-3 sm:py-3.5 rounded-full font-semibold text-sm sm:text-base transition-all duration-300 shadow-medium hover:shadow-large transform hover:scale-[1.02] active:scale-95"
+                    className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-100"
                   >
                     Inquire on WhatsApp
                   </button>
