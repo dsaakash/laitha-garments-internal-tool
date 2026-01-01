@@ -208,8 +208,20 @@ export default function PurchasesPage() {
 
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this purchase order?')) {
-      // Note: Delete functionality not yet implemented in API
-      alert('Purchase order deletion not yet implemented in API')
+      try {
+        const response = await fetch(`/api/purchases/${id}`, {
+          method: 'DELETE',
+        })
+        const result = await response.json()
+        if (!result.success) {
+          alert('Failed to delete purchase order')
+          return
+        }
+        await loadOrders()
+      } catch (error) {
+        console.error('Failed to delete purchase order:', error)
+        alert('Failed to delete purchase order')
+      }
     }
   }
 
