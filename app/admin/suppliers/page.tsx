@@ -89,7 +89,12 @@ export default function SuppliersPage() {
       gstPercentage: supplier.gstPercentage || 0,
       gstAmountRupees: supplier.gstAmountRupees || 0,
       gstType: supplier.gstType || 'percentage',
-      contacts: supplier.contacts || [],
+      contacts: (supplier.contacts || []).map(contact => ({
+        contactName: contact.contactName,
+        phone: contact.phone,
+        whatsappNumber: contact.whatsappNumber || '',
+        isPrimary: contact.isPrimary || false,
+      })),
     })
     setShowModal(true)
   }
