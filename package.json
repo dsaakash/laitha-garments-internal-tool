@@ -9,7 +9,16 @@
     "lint": "next lint",
     "init-db": "node scripts/init-db.js",
     "add-admin": "node scripts/add-admin.js",
-    "add-collection": "node scripts/add-collection-items.js"
+    "add-collection": "node scripts/add-collection-items.js",
+    "migrate-purchases": "node scripts/migrate-purchase-orders.js",
+    "migrate-gst-rupees": "node scripts/migrate-gst-rupees.js",
+    "migrate-stock": "node scripts/migrate-stock-tracking.js",
+    "backfill-stock": "node scripts/backfill-stock.js",
+    "fix-stock": "node scripts/fix-stock-matching.js",
+    "fix-legacy-pos": "node scripts/fix-stock-legacy-pos.js",
+    "migrate-sale-images": "node scripts/migrate-sale-images.js",
+    "migrate-contacts": "node scripts/migrate-supplier-contacts.js",
+    "create-pos": "node scripts/create-pos-from-inventory.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

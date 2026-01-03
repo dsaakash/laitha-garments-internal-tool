@@ -14,6 +14,9 @@ export interface InventoryItem {
   supplierName?: string
   supplierAddress?: string
   supplierPhone?: string
+  quantityIn?: number
+  quantityOut?: number
+  currentStock?: number
   createdAt: string
   updatedAt: string
 }
@@ -28,6 +31,7 @@ export interface Sale {
   totalAmount: number
   paymentMode: string
   upiTransactionId?: string
+  saleImage?: string // Image captured as proof of sale
   createdAt: string
 }
 
@@ -72,14 +76,39 @@ export interface Catalogue {
   updatedAt: string
 }
 
+export interface SupplierContact {
+  id?: string
+  contactName: string
+  phone: string
+  whatsappNumber?: string
+  isPrimary?: boolean
+}
+
 export interface Supplier {
   id: string
   name: string
   phone: string
   email?: string
   address?: string
+  gstNumber?: string
+  gstPercentage?: number
+  gstAmountRupees?: number
+  gstType?: 'percentage' | 'rupees'
+  contacts?: SupplierContact[]
   createdAt: string
   updatedAt: string
+}
+
+export interface PurchaseOrderItem {
+  id?: string
+  productName: string
+  category?: string
+  sizes: string[]
+  fabricType?: string
+  quantity: number
+  pricePerPiece: number
+  totalAmount: number
+  productImages?: string[]
 }
 
 export interface PurchaseOrder {
@@ -87,15 +116,25 @@ export interface PurchaseOrder {
   date: string
   supplierId: string
   supplierName: string
-  productName: string
-  productImage?: string
-  sizes: string[] // Array of sizes purchased
-  fabricType?: string
-  quantity: number
-  pricePerPiece: number
-  totalAmount: number
+  customPoNumber?: string
+  items: PurchaseOrderItem[] // Multiple products
+  invoiceImage?: string
+  subtotal: number
+  gstAmount: number
+  grandTotal: number
+  gstType?: 'percentage' | 'rupees'
+  gstPercentage?: number
+  gstAmountRupees?: number
   notes?: string
   createdAt: string
+  // Legacy fields for backward compatibility
+  productName?: string
+  productImage?: string
+  sizes?: string[]
+  fabricType?: string
+  quantity?: number
+  pricePerPiece?: number
+  totalAmount?: number
 }
 
 // In-memory storage (will be lost on server restart)

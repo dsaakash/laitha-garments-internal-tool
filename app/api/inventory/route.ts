@@ -20,6 +20,9 @@ export async function GET() {
       supplierName: row.supplier_name || '',
       supplierAddress: row.supplier_address || '',
       supplierPhone: row.supplier_phone || '',
+      quantityIn: row.quantity_in ? parseInt(row.quantity_in) : 0,
+      quantityOut: row.quantity_out ? parseInt(row.quantity_out) : 0,
+      currentStock: row.current_stock ? parseInt(row.current_stock) : 0,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     }))
@@ -73,6 +76,9 @@ export async function POST(request: NextRequest) {
       supplierName: item.supplier_name || '',
       supplierAddress: item.supplier_address || '',
       supplierPhone: item.supplier_phone || '',
+      quantityIn: item.quantity_in ? parseInt(item.quantity_in) : 0,
+      quantityOut: item.quantity_out ? parseInt(item.quantity_out) : 0,
+      currentStock: item.current_stock ? parseInt(item.current_stock) : 0,
       createdAt: item.created_at.toISOString(),
       updatedAt: item.updated_at.toISOString(),
     }

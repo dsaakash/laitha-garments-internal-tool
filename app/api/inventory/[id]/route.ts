@@ -61,6 +61,9 @@ export async function PUT(
       supplierName: item.supplier_name || '',
       supplierAddress: item.supplier_address || '',
       supplierPhone: item.supplier_phone || '',
+      quantityIn: item.quantity_in ? parseInt(item.quantity_in) : 0,
+      quantityOut: item.quantity_out ? parseInt(item.quantity_out) : 0,
+      currentStock: item.current_stock ? parseInt(item.current_stock) : 0,
       createdAt: item.created_at.toISOString(),
       updatedAt: item.updated_at.toISOString(),
     }

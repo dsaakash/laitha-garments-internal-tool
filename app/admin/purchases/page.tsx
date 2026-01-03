@@ -2,32 +2,48 @@
 
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { PurchaseOrder, Supplier } from '@/lib/storage'
+import { PurchaseOrder, PurchaseOrderItem, Supplier } from '@/lib/storage'
 import { format } from 'date-fns'
 
 export default function PurchasesPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [categories, setCategories] = useState<string[]>(['All'])
   const [showModal, setShowModal] = useState(false)
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null)
   const [filterSupplier, setFilterSupplier] = useState('')
+  const [filterCategory, setFilterCategory] = useState('All')
   const [filterMonth, setFilterMonth] = useState('')
   const [filterYear, setFilterYear] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     supplierId: '',
-    productName: '',
-    sizes: '',
-    fabricType: '',
-    quantity: '',
-    pricePerPiece: '',
-    productImage: '',
+    customPoNumber: '',
+    useCustomPo: false,
+    invoiceImage: '',
     notes: '',
+    gstType: 'percentage' as 'percentage' | 'rupees',
+    gstPercentage: 0,
+    gstAmountRupees: 0,
   })
+  const [items, setItems] = useState<PurchaseOrderItem[]>([
+    {
+      productName: '',
+      category: '',
+      sizes: [],
+      fabricType: '',
+      quantity: 0,
+      pricePerPiece: 0,
+      totalAmount: 0,
+      productImages: [],
+    }
+  ])
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
+  const [uploadingInvoice, setUploadingInvoice] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -37,26 +53,47 @@ export default function PurchasesPage() {
   useEffect(() => {
     loadOrders()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSupplier, filterMonth, filterYear])
+  }, [filterSupplier, filterCategory, filterMonth, filterYear])
 
   const loadData = async () => {
     try {
-      const response = await fetch('/api/suppliers')
-      const result = await response.json()
-      if (result.success) {
-        setSuppliers(result.data)
+      const [suppliersRes, ordersRes] = await Promise.all([
+        fetch('/api/suppliers'),
+        fetch('/api/purchases')
+      ])
+      
+      const suppliersResult = await suppliersRes.json()
+      if (suppliersResult.success) {
+        setSuppliers(suppliersResult.data)
       }
-      await loadOrders()
+      
+      const ordersResult = await ordersRes.json()
+      if (ordersResult.success) {
+        setCategories(ordersResult.categories || ['All'])
+        await loadOrders()
+      }
     } catch (error) {
-      console.error('Failed to load suppliers:', error)
+      console.error('Failed to load data:', error)
     }
   }
 
   const loadOrders = async () => {
     try {
-      const response = await fetch('/api/purchases')
+      const url = new URL('/api/purchases', window.location.origin)
+      if (filterCategory && filterCategory !== 'All') {
+        url.searchParams.set('category', filterCategory)
+      }
+      
+      const response = await fetch(url.toString())
       const result = await response.json()
-      if (result.success) {
+      
+      if (!result.success) {
+        console.error('API error:', result.message || result.error)
+        alert(`Failed to load purchase orders: ${result.message || 'Unknown error'}`)
+        return
+      }
+      
+      if (result.data && Array.isArray(result.data)) {
         let allOrders = result.data
         
         if (filterSupplier) {
@@ -77,15 +114,81 @@ export default function PurchasesPage() {
           })
         }
         
+        // Search by supplier name
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim()
+          allOrders = allOrders.filter((order: PurchaseOrder) => 
+            order.supplierName.toLowerCase().includes(query) ||
+            (order.customPoNumber && order.customPoNumber.toLowerCase().includes(query)) ||
+            (order.items && order.items.some(item => item.productName.toLowerCase().includes(query))) ||
+            (order.productName && order.productName.toLowerCase().includes(query))
+          )
+        }
+        
         allOrders.sort((a: PurchaseOrder, b: PurchaseOrder) => new Date(b.date).getTime() - new Date(a.date).getTime())
         setOrders(allOrders)
+        console.log(`Loaded ${allOrders.length} purchase orders`)
+      } else {
+        console.error('Invalid data format:', result)
+        setOrders([])
       }
     } catch (error) {
       console.error('Failed to load purchase orders:', error)
+      alert('Failed to load purchase orders. Please check the console for details.')
     }
   }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, itemIndex: number) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploadingIndex(itemIndex)
+    try {
+      const uploadedUrls: string[] = []
+      
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) {
+          alert('Please select image files only')
+          continue
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+          alert(`File ${file.name} is too large. Max size is 5MB`)
+          continue
+        }
+
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          uploadedUrls.push(data.url)
+        }
+      }
+      
+      if (uploadedUrls.length > 0) {
+        setItems(prev => {
+          const newItems = [...prev]
+          newItems[itemIndex] = {
+            ...newItems[itemIndex],
+            productImages: [...(newItems[itemIndex].productImages || []), ...uploadedUrls]
+          }
+          return newItems
+        })
+      }
+    } catch (error) {
+      alert('Failed to upload images. Please try again.')
+    } finally {
+      setUploadingIndex(null)
+    }
+  }
+
+  const handleInvoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -99,7 +202,7 @@ export default function PurchasesPage() {
       return
     }
 
-    setUploading(true)
+    setUploadingInvoice(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -111,16 +214,66 @@ export default function PurchasesPage() {
 
       const data = await response.json()
       if (data.success) {
-        setFormData(prev => ({ ...prev, productImage: data.url }))
-        setPreviewImage(data.url)
+        setFormData(prev => ({ ...prev, invoiceImage: data.url }))
       } else {
-        alert(data.message || 'Failed to upload image')
+        alert(data.message || 'Failed to upload invoice')
       }
     } catch (error) {
-      alert('Failed to upload image. Please try again.')
+      alert('Failed to upload invoice. Please try again.')
     } finally {
-      setUploading(false)
+      setUploadingInvoice(false)
     }
+  }
+
+  const addItem = () => {
+    setItems(prev => [...prev, {
+      productName: '',
+      category: '',
+      sizes: [],
+      fabricType: '',
+      quantity: 0,
+      pricePerPiece: 0,
+      totalAmount: 0,
+      productImages: [],
+    }])
+  }
+
+  const removeItem = (index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updateItem = (index: number, field: keyof PurchaseOrderItem, value: any) => {
+    setItems(prev => {
+      const newItems = [...prev]
+      const item = { ...newItems[index] }
+      
+      if (field === 'sizes') {
+        item.sizes = typeof value === 'string' 
+          ? value.split(',').map(s => s.trim()).filter(Boolean)
+          : value
+      } else {
+        (item as any)[field] = value
+      }
+      
+      // Recalculate total
+      if (field === 'quantity' || field === 'pricePerPiece') {
+        item.totalAmount = item.quantity * item.pricePerPiece
+      }
+      
+      newItems[index] = item
+      return newItems
+    })
+  }
+
+  const removeImage = (itemIndex: number, imageIndex: number) => {
+    setItems(prev => {
+      const newItems = [...prev]
+      newItems[itemIndex] = {
+        ...newItems[itemIndex],
+        productImages: newItems[itemIndex].productImages?.filter((_, i) => i !== imageIndex) || []
+      }
+      return newItems
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,72 +285,69 @@ export default function PurchasesPage() {
       return
     }
 
-    const quantity = parseFloat(formData.quantity)
-    const pricePerPiece = parseFloat(formData.pricePerPiece)
-    const totalAmount = quantity * pricePerPiece
-    const sizesArray = formData.sizes.split(',').map(s => s.trim()).filter(Boolean)
+    // Validate items
+    const validItems = items.filter(item => 
+      item.productName && item.quantity > 0 && item.pricePerPiece > 0
+    )
 
-    if (sizesArray.length === 0) {
-      alert('Please enter at least one size')
+    if (validItems.length === 0) {
+      alert('Please add at least one valid product')
+      return
+    }
+
+    // Validate custom PO number if enabled
+    if (formData.useCustomPo && !formData.customPoNumber.trim()) {
+      alert('Please enter a custom PO number')
       return
     }
 
     try {
-      if (!editingOrder) {
-        // Create new purchase order
-        const response = await fetch('/api/purchases', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date: formData.date,
-            supplierId: formData.supplierId,
-            supplierName: supplier.name,
-            productName: formData.productName,
-            productImage: formData.productImage || undefined,
-            sizes: sizesArray,
-            fabricType: formData.fabricType || undefined,
-            quantity,
-            pricePerPiece,
-            totalAmount,
-            notes: formData.notes || undefined,
-          }),
-        })
-        
-        const result = await response.json()
-        if (!result.success) {
-          alert('Failed to add purchase order')
-          return
-        }
-        
-        alert(`Purchase order added! Inventory updated automatically.`)
-      } else {
-        // Update existing purchase order
-        const response = await fetch(`/api/purchases/${editingOrder.id}`, {
+      const totals = calculateTotals()
+      
+      const payload = {
+        date: formData.date,
+        supplierId: formData.supplierId,
+        supplierName: supplier.name,
+        customPoNumber: formData.useCustomPo ? formData.customPoNumber : undefined,
+        invoiceImage: formData.invoiceImage || undefined,
+        items: validItems.map(item => ({
+          productName: item.productName,
+          category: item.category || 'Custom',
+          sizes: item.sizes || [],
+          fabricType: item.fabricType || undefined,
+          quantity: parseInt(item.quantity) || 0, // Ensure quantity is an integer
+          pricePerPiece: parseFloat(item.pricePerPiece) || 0,
+          totalAmount: parseFloat(item.totalAmount) || 0,
+          productImages: item.productImages || [],
+        })),
+        gstType: totals.gstType,
+        gstPercentage: totals.gstPercentage || undefined,
+        gstAmountRupees: totals.gstAmountRupees || undefined,
+        notes: formData.notes || undefined,
+      }
+
+      let response
+      if (editingOrder) {
+        response = await fetch(`/api/purchases/${editingOrder.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date: formData.date,
-            supplierId: formData.supplierId,
-            supplierName: supplier.name,
-            productName: formData.productName,
-            productImage: formData.productImage || undefined,
-            sizes: sizesArray,
-            fabricType: formData.fabricType || undefined,
-            quantity,
-            pricePerPiece,
-            totalAmount,
-            notes: formData.notes || undefined,
-          }),
+          body: JSON.stringify(payload),
         })
-        
-        const result = await response.json()
-        if (!result.success) {
-          alert('Failed to update purchase order')
-          return
-        }
-        
-        alert(`Purchase order updated! Inventory updated automatically.`)
+      } else {
+        response = await fetch('/api/purchases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
       }
+      
+      const result = await response.json()
+      if (!result.success) {
+        alert(`Failed to ${editingOrder ? 'update' : 'add'} purchase order: ${result.message || 'Unknown error'}`)
+        return
+      }
+      
+      alert(`Purchase order ${editingOrder ? 'updated' : 'added'}! Inventory updated automatically.`)
       
       resetForm()
       await loadOrders()
@@ -213,15 +363,41 @@ export default function PurchasesPage() {
     setFormData({
       date: order.date,
       supplierId: order.supplierId,
-      productName: order.productName,
-      sizes: (order.sizes && order.sizes.length > 0) ? order.sizes.join(', ') : '',
-      fabricType: order.fabricType || '',
-      quantity: order.quantity.toString(),
-      pricePerPiece: order.pricePerPiece.toString(),
-      productImage: order.productImage || '',
+      customPoNumber: order.customPoNumber || '',
+      useCustomPo: !!order.customPoNumber,
+      invoiceImage: order.invoiceImage || '',
       notes: order.notes || '',
+      gstType: order.gstType || 'percentage',
+      gstPercentage: order.gstPercentage || 0,
+      gstAmountRupees: order.gstAmountRupees || 0,
     })
-    setPreviewImage(order.productImage || null)
+    
+    // Convert order to items format
+    if (order.items && order.items.length > 0) {
+      setItems(order.items.map(item => ({
+        productName: item.productName,
+        category: item.category || '',
+        sizes: item.sizes || [],
+        fabricType: item.fabricType || '',
+        quantity: item.quantity,
+        pricePerPiece: item.pricePerPiece,
+        totalAmount: item.totalAmount,
+        productImages: item.productImages || [],
+      })))
+    } else {
+      // Legacy format
+      setItems([{
+        productName: order.productName || '',
+        category: 'Custom',
+        sizes: order.sizes || [],
+        fabricType: order.fabricType || '',
+        quantity: order.quantity || 0,
+        pricePerPiece: order.pricePerPiece || 0,
+        totalAmount: order.totalAmount || 0,
+        productImages: order.productImage ? [order.productImage] : [],
+      }])
+    }
+    
     setShowModal(true)
   }
 
@@ -253,28 +429,70 @@ export default function PurchasesPage() {
     setFormData({
       date: format(new Date(), 'yyyy-MM-dd'),
       supplierId: '',
-      productName: '',
-      sizes: '',
-      fabricType: '',
-      quantity: '',
-      pricePerPiece: '',
-      productImage: '',
+      customPoNumber: '',
+      useCustomPo: false,
+      invoiceImage: '',
       notes: '',
+      gstType: 'percentage',
+      gstPercentage: 0,
+      gstAmountRupees: 0,
     })
+    setItems([{
+      productName: '',
+      category: '',
+      sizes: [],
+      fabricType: '',
+      quantity: 0,
+      pricePerPiece: 0,
+      totalAmount: 0,
+      productImages: [],
+    }])
     setEditingOrder(null)
-    setPreviewImage(null)
   }
 
-  const calculateTotal = () => {
-    const quantity = parseFloat(formData.quantity) || 0
-    const pricePerPiece = parseFloat(formData.pricePerPiece) || 0
-    return quantity * pricePerPiece
+  const calculateTotals = () => {
+    const subtotal = items.reduce((sum, item) => sum + item.totalAmount, 0)
+    const selectedSupplier = suppliers.find(s => s.id === formData.supplierId)
+    
+    let gstAmount = 0
+    let gstPercentage = 0
+    let gstAmountRupees = 0
+    let gstType: 'percentage' | 'rupees' = 'percentage'
+    
+    // Check if manual GST override is set
+    if (formData.gstType === 'rupees' && formData.gstAmountRupees > 0) {
+      gstType = 'rupees'
+      gstAmountRupees = formData.gstAmountRupees
+      gstAmount = gstAmountRupees
+    } else if (formData.gstType === 'percentage' && formData.gstPercentage > 0) {
+      gstType = 'percentage'
+      gstPercentage = formData.gstPercentage
+      gstAmount = (subtotal * gstPercentage) / 100
+    } else if (selectedSupplier) {
+      // Use supplier's GST settings
+      if (selectedSupplier.gstType === 'rupees' && selectedSupplier.gstAmountRupees) {
+        gstType = 'rupees'
+        gstAmountRupees = selectedSupplier.gstAmountRupees
+        gstAmount = gstAmountRupees
+      } else if (selectedSupplier.gstPercentage) {
+        gstType = 'percentage'
+        gstPercentage = selectedSupplier.gstPercentage
+        gstAmount = (subtotal * gstPercentage) / 100
+      }
+    }
+    
+    const grandTotal = subtotal + gstAmount
+    
+    return { subtotal, gstAmount, grandTotal, gstPercentage, gstAmountRupees, gstType }
   }
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
+  const totals = calculateTotals()
+  const totalAmount = orders.reduce((sum, order) => sum + (order.grandTotal || order.totalAmount || 0), 0)
 
-  const totalAmount = orders.reduce((sum, order) => sum + order.totalAmount, 0)
+  // Get available categories from inventory
+  const availableCategories = ['Custom', 'Kurtis', 'Dresses', 'Sarees', 'Tops', 'Bottoms']
 
   return (
     <AdminLayout>
@@ -301,7 +519,31 @@ export default function PurchasesPage() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+          {/* Search Bar */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search Purchase Orders</label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by supplier name, PO number, or product name..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+          
           <div className="flex gap-4 items-end flex-wrap">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Category</label>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Supplier</label>
               <select
@@ -350,12 +592,14 @@ export default function PurchasesPage() {
                 <option value="12">December</option>
               </select>
             </div>
-            {(filterSupplier || filterMonth || filterYear) && (
+            {(filterSupplier || filterCategory !== 'All' || filterMonth || filterYear || searchQuery) && (
               <button
                 onClick={() => {
                   setFilterSupplier('')
+                  setFilterCategory('All')
                   setFilterMonth('')
                   setFilterYear('')
+                  setSearchQuery('')
                 }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
               >
@@ -377,68 +621,101 @@ export default function PurchasesPage() {
             <p className="text-gray-500 text-lg">No purchase orders yet. Add your first purchase order!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
             {orders.map((order) => (
               <div 
                 key={order.id} 
-                className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                className="bg-white rounded-lg shadow-md p-4 lg:p-6 cursor-pointer hover:shadow-xl transition-all duration-200 border border-gray-100 hover:border-purple-200 relative"
                 onClick={() => handleViewDetails(order)}
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">{order.productName}</h3>
-                    <p className="text-sm text-gray-500">{order.supplierName}</p>
+                <div className="flex justify-between items-start mb-4 relative">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h3 className="text-lg font-bold text-gray-900 truncate">
+                      {order.customPoNumber || `PO-${order.id}`}
+                      {(() => {
+                        // Get product name(s)
+                        let productName = ''
+                        if (order.items && order.items.length > 0) {
+                          const names = order.items.map(item => item.productName).filter(Boolean)
+                          if (names.length === 1) {
+                            productName = names[0]
+                          } else if (names.length > 1) {
+                            productName = `${names[0]}${names.length > 1 ? ` +${names.length - 1} more` : ''}`
+                          }
+                        } else if (order.productName) {
+                          productName = order.productName
+                        }
+                        return productName ? ` - ${productName}` : ''
+                      })()}
+                    </h3>
+                    <p className="text-sm text-gray-500 truncate">{order.supplierName}</p>
+                    {order.items && order.items.length > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        {order.items.length} product{order.items.length > 1 ? 's' : ''}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex space-x-1 flex-shrink-0 z-10 relative" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => handleEdit(order)}
-                      className="text-blue-600 hover:text-blue-900 text-sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleEdit(order)
+                      }}
+                      className="px-2 py-1.5 sm:px-3 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 rounded-md text-xs sm:text-sm font-medium transition-all shadow-sm hover:shadow-md border border-blue-200 min-w-[50px] sm:min-w-[60px] whitespace-nowrap"
+                      title="Edit"
                     >
-                      Edit
+                      <span className="hidden sm:inline">✏️ </span>Edit
                     </button>
                     <button
-                      onClick={() => handleDelete(order.id)}
-                      className="text-red-600 hover:text-red-900 text-sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(order.id)
+                      }}
+                      className="px-2 py-1.5 sm:px-3 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 rounded-md text-xs sm:text-sm font-medium transition-all shadow-sm hover:shadow-md border border-red-200 min-w-[50px] sm:min-w-[60px] whitespace-nowrap"
+                      title="Delete"
                     >
-                      Delete
+                      <span className="hidden sm:inline">🗑️ </span>Delete
                     </button>
                   </div>
                 </div>
                 
-                {order.productImage && (
+                {order.items && order.items.length > 0 && order.items[0].productImages && order.items[0].productImages.length > 0 ? (
                   <img
-                    src={order.productImage}
-                    alt={order.productName}
+                    src={order.items[0].productImages[0]}
+                    alt={order.items[0].productName}
                     className="w-full h-48 object-cover rounded-lg mb-4"
                   />
-                )}
+                ) : order.productImage ? (
+                  <img
+                    src={order.productImage}
+                    alt={order.productName || 'Product'}
+                    className="w-full h-48 object-cover rounded-lg mb-4"
+                  />
+                ) : null}
                 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Date:</span>
                     <span className="font-medium">{format(new Date(order.date), 'dd MMM yyyy')}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Sizes:</span>
-                    <span className="font-medium">{(order.sizes && order.sizes.length > 0) ? order.sizes.join(', ') : 'Not specified'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Quantity:</span>
-                    <span className="font-medium">{order.quantity} pieces</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Price per piece:</span>
-                    <span className="font-medium">₹{order.pricePerPiece}</span>
-                  </div>
                   <div className="flex justify-between pt-2 border-t">
-                    <span className="text-gray-900 font-bold">Total Amount:</span>
-                    <span className="text-green-600 font-bold text-lg">₹{order.totalAmount.toLocaleString()}</span>
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="text-gray-700 font-medium">
+                      ₹{(order.subtotal || order.totalAmount || 0).toLocaleString()}
+                    </span>
                   </div>
-                  {order.notes && (
-                    <div className="pt-2 border-t">
-                      <p className="text-gray-600 text-xs">{order.notes}</p>
+                  {order.gstAmount != null && order.gstAmount > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">GST:</span>
+                      <span className="text-gray-600">₹{order.gstAmount.toLocaleString()}</span>
                     </div>
                   )}
+                  <div className="flex justify-between pt-1 border-t">
+                    <span className="text-gray-900 font-bold">Total Amount:</span>
+                    <span className="text-green-600 font-bold text-lg">
+                      ₹{(order.grandTotal || order.totalAmount || 0).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -448,11 +725,11 @@ export default function PurchasesPage() {
         {/* Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg p-8 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold mb-6">
                 {editingOrder ? 'Edit Purchase Order' : 'Add Purchase Order'}
               </h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
@@ -474,124 +751,310 @@ export default function PurchasesPage() {
                     >
                       <option value="">Select Supplier</option>
                       {suppliers.map(supplier => (
-                        <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name} {supplier.gstPercentage ? `(GST: ${supplier.gstPercentage}%)` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+
+                <div className="flex items-center gap-2">
                   <input
-                    type="text"
-                    required
-                    value={formData.productName}
-                    onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    type="checkbox"
+                    id="useCustomPo"
+                    checked={formData.useCustomPo}
+                    onChange={(e) => setFormData({ ...formData, useCustomPo: e.target.checked })}
+                    className="w-4 h-4"
                   />
+                  <label htmlFor="useCustomPo" className="text-sm font-medium text-gray-700">
+                    Use Custom PO Number
+                  </label>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Sizes * (comma-separated)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., M-38, L-40, XL-42, XXL-44"
-                    value={formData.sizes}
-                    onChange={(e) => setFormData({ ...formData, sizes: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">These sizes will be added to inventory</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fabric Type (optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Cotton, Silk, Polyester, Linen"
-                    value={formData.fabricType}
-                    onChange={(e) => setFormData({ ...formData, fabricType: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+                {formData.useCustomPo && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      step="1"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Price per Piece (₹) *</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      step="0.01"
-                      value={formData.pricePerPiece}
-                      onChange={(e) => setFormData({ ...formData, pricePerPiece: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Total Amount:</span>
-                    <span className="text-xl font-bold text-purple-600">₹{calculateTotal().toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Image (optional)</label>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      disabled={uploading}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
-                    />
-                    {uploading && (
-                      <p className="text-sm text-gray-500">Uploading...</p>
-                    )}
-                    {(previewImage || formData.productImage) && (
-                      <div className="mt-2">
-                        <img
-                          src={previewImage || formData.productImage}
-                          alt="Preview"
-                          className="max-w-xs h-32 object-cover rounded border"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({ ...prev, productImage: '' }))
-                            setPreviewImage(null)
-                          }}
-                          className="mt-2 text-sm text-red-600 hover:text-red-700"
-                        >
-                          Remove Image
-                        </button>
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500">Or enter image URL:</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Custom PO Number *</label>
                     <input
                       type="text"
-                      value={formData.productImage}
-                      onChange={(e) => {
-                        setFormData({ ...formData, productImage: e.target.value })
-                        setPreviewImage(e.target.value || null)
-                      }}
-                      placeholder="https://... or /uploads/..."
+                      required={formData.useCustomPo}
+                      value={formData.customPoNumber}
+                      onChange={(e) => setFormData({ ...formData, customPoNumber: e.target.value })}
+                      placeholder="e.g., PO-2024-001"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
+                  </div>
+                )}
+
+                {/* Products Section */}
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold">Products</h3>
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+                    >
+                      + Add Product
+                    </button>
+                  </div>
+
+                  {items.map((item, index) => (
+                    <div key={index} className="border rounded-lg p-4 mb-4 bg-gray-50">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium text-gray-700">Product {index + 1}</h4>
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="text-red-600 hover:text-red-700 text-sm"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={item.productName}
+                            onChange={(e) => updateItem(index, 'productName', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                          <select
+                            value={item.category}
+                            onChange={(e) => updateItem(index, 'category', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            <option value="">Select Category</option>
+                            {availableCategories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Fabric Type</label>
+                          <input
+                            type="text"
+                            value={item.fabricType || ''}
+                            onChange={(e) => updateItem(index, 'fabricType', e.target.value)}
+                            placeholder="e.g., Cotton, Silk"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Sizes (comma-separated)</label>
+                          <input
+                            type="text"
+                            value={item.sizes?.join(', ') || ''}
+                            onChange={(e) => updateItem(index, 'sizes', e.target.value)}
+                            placeholder="M, L, XL"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                          <input
+                            type="number"
+                            required
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Price per Piece (₹) *</label>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            step="0.01"
+                            value={item.pricePerPiece}
+                            onChange={(e) => updateItem(index, 'pricePerPiece', parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+
+                        <div className="col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (multiple allowed)</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => handleImageUpload(e, index)}
+                            disabled={uploadingIndex === index}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                          />
+                          {uploadingIndex === index && (
+                            <p className="text-sm text-gray-500 mt-1">Uploading...</p>
+                          )}
+                          {item.productImages && item.productImages.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {item.productImages.map((img, imgIndex) => (
+                                <div key={imgIndex} className="relative">
+                                  <img
+                                    src={img}
+                                    alt={`Product ${index + 1} - Image ${imgIndex + 1}`}
+                                    className="w-20 h-20 object-cover rounded border"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeImage(index, imgIndex)}
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="col-span-2 bg-purple-50 p-3 rounded">
+                          <div className="flex justify-between">
+                            <span className="text-sm font-medium text-gray-700">Item Total:</span>
+                            <span className="text-lg font-bold text-purple-600">₹{item.totalAmount.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* GST Section */}
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-bold mb-4">GST Settings</h3>
+                  {(() => {
+                    const selectedSupplier = suppliers.find(s => s.id === formData.supplierId)
+                    return (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">GST Type</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center">
+                              <input
+                                type="radio"
+                                value="percentage"
+                                checked={formData.gstType === 'percentage'}
+                                onChange={(e) => setFormData({ ...formData, gstType: 'percentage' as const, gstAmountRupees: 0 })}
+                                className="mr-2"
+                              />
+                              Percentage (%)
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="radio"
+                                value="rupees"
+                                checked={formData.gstType === 'rupees'}
+                                onChange={(e) => setFormData({ ...formData, gstType: 'rupees' as const, gstPercentage: 0 })}
+                                className="mr-2"
+                              />
+                              Fixed Amount (₹)
+                            </label>
+                          </div>
+                        </div>
+
+                        {formData.gstType === 'percentage' ? (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              GST Percentage {selectedSupplier?.gstPercentage ? `(Default: ${selectedSupplier.gstPercentage}%)` : ''}
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={formData.gstPercentage || selectedSupplier?.gstPercentage || ''}
+                              onChange={(e) => setFormData({ ...formData, gstPercentage: parseFloat(e.target.value) || 0 })}
+                              placeholder={selectedSupplier?.gstPercentage ? `${selectedSupplier.gstPercentage}` : 'Enter GST %'}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Leave empty to use supplier&apos;s default GST percentage</p>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              GST Amount (₹) {selectedSupplier?.gstAmountRupees ? `(Default: ₹${selectedSupplier.gstAmountRupees})` : ''}
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={formData.gstAmountRupees || selectedSupplier?.gstAmountRupees || ''}
+                              onChange={(e) => setFormData({ ...formData, gstAmountRupees: parseFloat(e.target.value) || 0 })}
+                              placeholder={selectedSupplier?.gstAmountRupees ? `${selectedSupplier.gstAmountRupees}` : 'Enter GST amount'}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Leave empty to use supplier&apos;s default GST amount</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                {/* Invoice Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Image (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleInvoiceUpload}
+                    disabled={uploadingInvoice}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                  />
+                  {uploadingInvoice && (
+                    <p className="text-sm text-gray-500 mt-1">Uploading...</p>
+                  )}
+                  {formData.invoiceImage && (
+                    <div className="mt-2">
+                      <img
+                        src={formData.invoiceImage}
+                        alt="Invoice"
+                        className="max-w-xs h-32 object-cover rounded border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, invoiceImage: '' }))}
+                        className="mt-2 text-sm text-red-600 hover:text-red-700"
+                      >
+                        Remove Invoice
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Totals */}
+                <div className="bg-purple-50 p-4 rounded-lg border-t-2 border-purple-200">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Subtotal:</span>
+                      <span className="text-lg font-bold text-gray-900">₹{totals.subtotal.toLocaleString()}</span>
+                    </div>
+                    {totals.gstAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          GST {totals.gstType === 'percentage' ? `(${totals.gstPercentage}%)` : '(Fixed)'}:
+                        </span>
+                        <span className="text-lg font-bold text-gray-900">₹{totals.gstAmount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-purple-300">
+                      <span className="text-xl font-bold text-gray-900">Grand Total:</span>
+                      <span className="text-2xl font-bold text-purple-600">₹{totals.grandTotal.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -631,9 +1094,26 @@ export default function PurchasesPage() {
         {/* Detail Modal */}
         {showDetailModal && selectedOrder && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-start mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Purchase Order Details</h2>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Purchase Order: {selectedOrder.customPoNumber || `PO-${selectedOrder.id}`}
+                  {(() => {
+                    // Get product name(s)
+                    let productName = ''
+                    if (selectedOrder.items && selectedOrder.items.length > 0) {
+                      const names = selectedOrder.items.map(item => item.productName).filter(Boolean)
+                      if (names.length === 1) {
+                        productName = names[0]
+                      } else if (names.length > 1) {
+                        productName = `${names[0]}${names.length > 1 ? ` +${names.length - 1} more` : ''}`
+                      }
+                    } else if (selectedOrder.productName) {
+                      productName = selectedOrder.productName
+                    }
+                    return productName ? ` - ${productName}` : ''
+                  })()}
+                </h2>
                 <button
                   onClick={() => {
                     setShowDetailModal(false)
@@ -645,120 +1125,152 @@ export default function PurchasesPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Image Section */}
-                <div>
-                  {selectedOrder.productImage ? (
-                    <img
-                      src={selectedOrder.productImage}
-                      alt={selectedOrder.productName}
-                      className="w-full h-96 object-cover rounded-lg border-2 border-gray-200"
-                    />
-                  ) : (
-                    <div className="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400">
-                      No Image Available
-                    </div>
-                  )}
-                </div>
-
-                {/* Details Section */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Product Name</label>
-                    <p className="text-lg font-bold text-gray-900">{selectedOrder.productName}</p>
-                  </div>
-
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Supplier</label>
                     <p className="text-lg text-gray-900">{selectedOrder.supplierName}</p>
                   </div>
-
                   <div>
                     <label className="text-sm font-medium text-gray-500">Date</label>
                     <p className="text-lg text-gray-900">{format(new Date(selectedOrder.date), 'dd MMM yyyy')}</p>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Sizes Purchased</label>
-                    {selectedOrder.sizes && selectedOrder.sizes.length > 0 ? (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {selectedOrder.sizes.map((size, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium"
-                          >
-                            {size}
-                          </span>
-                        ))}
+                {/* Products List */}
+                {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold">Products</h3>
+                    {selectedOrder.items.map((item, index) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-bold text-gray-900">{item.productName}</h4>
+                          <span className="text-sm text-gray-500">{item.category}</span>
+                        </div>
+                        {item.productImages && item.productImages.length > 0 && (
+                          <div className="flex gap-2 mb-2">
+                            {item.productImages.map((img, imgIndex) => (
+                              <img
+                                key={imgIndex}
+                                src={img}
+                                alt={`${item.productName} - Image ${imgIndex + 1}`}
+                                className="w-24 h-24 object-cover rounded border"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-600">Sizes: </span>
+                            <span className="font-medium">{item.sizes?.join(', ') || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Fabric: </span>
+                            <span className="font-medium">{item.fabricType || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Quantity: </span>
+                            <span className="font-medium">{item.quantity} pieces</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Price: </span>
+                            <span className="font-medium">₹{item.pricePerPiece} per piece</span>
+                          </div>
+                          <div className="col-span-2 pt-2 border-t">
+                            <span className="text-gray-600">Item Total: </span>
+                            <span className="font-bold text-green-600">₹{item.totalAmount.toLocaleString()}</span>
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 mt-2">No sizes specified</p>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-4">
+                    <h4 className="font-bold text-gray-900">{selectedOrder.productName || 'Product'}</h4>
+                    {selectedOrder.productImage && (
+                      <img
+                        src={selectedOrder.productImage}
+                        alt={selectedOrder.productName}
+                        className="w-full h-64 object-cover rounded-lg my-4"
+                      />
                     )}
-                  </div>
-
-                  {selectedOrder.fabricType && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Fabric Type</label>
-                      <p className="text-lg text-gray-900">{selectedOrder.fabricType}</p>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Quantity</label>
-                      <p className="text-xl font-bold text-gray-900">{selectedOrder.quantity} pieces</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Price per Piece</label>
-                      <p className="text-xl font-bold text-gray-900">₹{selectedOrder.pricePerPiece}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+                      <div>
+                        <span className="text-gray-600">Sizes: </span>
+                        <span className="font-medium">{(selectedOrder.sizes || []).join(', ') || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Quantity: </span>
+                        <span className="font-medium">{selectedOrder.quantity} pieces</span>
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  <div className="pt-4 border-t">
-                    <label className="text-sm font-medium text-gray-500">Total Amount</label>
-                    <p className="text-2xl font-bold text-green-600">₹{selectedOrder.totalAmount.toLocaleString()}</p>
+                {/* Invoice Image */}
+                {selectedOrder.invoiceImage && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500 mb-2 block">Invoice</label>
+                    <img
+                      src={selectedOrder.invoiceImage}
+                      alt="Invoice"
+                      className="w-full max-w-md h-auto rounded-lg border"
+                    />
                   </div>
+                )}
 
-                  <div className="pt-4 border-t">
-                    <label className="text-sm font-medium text-gray-500">Expected Selling Price (2x markup)</label>
-                    <p className="text-xl font-bold text-purple-600">₹{(selectedOrder.pricePerPiece * 2).toLocaleString()} per piece</p>
-                    <p className="text-sm text-gray-500 mt-1">Total if all sold: ₹{(selectedOrder.pricePerPiece * 2 * selectedOrder.quantity).toLocaleString()}</p>
-                  </div>
-
-                  {selectedOrder.notes && (
-                    <div className="pt-4 border-t">
-                      <label className="text-sm font-medium text-gray-500">Notes</label>
-                      <p className="text-sm text-gray-900 mt-1">{selectedOrder.notes}</p>
+                {/* Totals */}
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Subtotal:</span>
+                      <span className="text-lg font-bold text-gray-900">
+                        ₹{(selectedOrder.subtotal || selectedOrder.totalAmount || 0).toLocaleString()}
+                      </span>
                     </div>
-                  )}
-
-                  <div className="pt-4 border-t">
-                    <label className="text-sm font-medium text-gray-500">Created</label>
-                    <p className="text-sm text-gray-600">
-                      {format(new Date(selectedOrder.createdAt), 'dd MMM yyyy HH:mm')}
-                    </p>
+                    {selectedOrder.gstAmount && selectedOrder.gstAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-700">GST:</span>
+                        <span className="text-lg font-bold text-gray-900">
+                          ₹{selectedOrder.gstAmount.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-purple-300">
+                      <span className="text-xl font-bold text-gray-900">Grand Total:</span>
+                      <span className="text-2xl font-bold text-purple-600">
+                        ₹{(selectedOrder.grandTotal || selectedOrder.totalAmount || 0).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="flex space-x-4 pt-4">
-                    <button
-                      onClick={() => {
-                        setShowDetailModal(false)
-                        handleEdit(selectedOrder)
-                      }}
-                      className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      ✏️ Edit Order
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowDetailModal(false)
-                        setSelectedOrder(null)
-                      }}
-                      className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
-                    >
-                      Close
-                    </button>
+                {selectedOrder.notes && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Notes</label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedOrder.notes}</p>
                   </div>
+                )}
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowDetailModal(false)
+                      handleEdit(selectedOrder)
+                    }}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    ✏️ Edit Order
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDetailModal(false)
+                      setSelectedOrder(null)
+                    }}
+                    className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
             </div>
@@ -768,4 +1280,3 @@ export default function PurchasesPage() {
     </AdminLayout>
   )
 }
-

@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
     // Start transaction - insert sale first
     const saleResult = await query(
       `INSERT INTO sales 
-       (date, party_name, customer_id, bill_number, total_amount, payment_mode, upi_transaction_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (date, party_name, customer_id, bill_number, total_amount, payment_mode, upi_transaction_id, sale_image)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         body.date,
@@ -94,13 +94,14 @@ export async function POST(request: NextRequest) {
         body.totalAmount,
         body.paymentMode,
         body.upiTransactionId || null,
+        body.saleImage || null,
       ]
     )
     
     const sale = saleResult.rows[0]
     const saleId = sale.id
     
-    // Insert sale items
+    // Insert sale items and update inventory stock
     if (body.items && body.items.length > 0) {
       for (const item of body.items) {
         await query(
@@ -121,6 +122,54 @@ export async function POST(request: NextRequest) {
             item.profit,
           ]
         )
+        
+        // Update inventory stock: decrease quantity_out and current_stock
+        if (item.inventoryId) {
+          const inventoryResult = await query(
+            'SELECT quantity_out, current_stock FROM inventory WHERE id = $1',
+            [parseInt(item.inventoryId)]
+          )
+          
+          if (inventoryResult.rows.length > 0) {
+            const inventory = inventoryResult.rows[0]
+            const currentQuantityOut = parseInt(inventory.quantity_out) || 0
+            const currentStock = parseInt(inventory.current_stock) || 0
+            const newQuantityOut = currentQuantityOut + item.quantity
+            const newCurrentStock = Math.max(0, currentStock - item.quantity) // Prevent negative stock
+            
+            await query(
+              `UPDATE inventory 
+               SET quantity_out = $1, 
+                   current_stock = $2,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $3`,
+              [newQuantityOut, newCurrentStock, parseInt(item.inventoryId)]
+            )
+          }
+        } else if (item.dressCode) {
+          // Try to find inventory by dress_code if inventory_id is not provided
+          const inventoryResult = await query(
+            'SELECT id, quantity_out, current_stock FROM inventory WHERE dress_code = $1',
+            [item.dressCode]
+          )
+          
+          if (inventoryResult.rows.length > 0) {
+            const inventory = inventoryResult.rows[0]
+            const currentQuantityOut = parseInt(inventory.quantity_out) || 0
+            const currentStock = parseInt(inventory.current_stock) || 0
+            const newQuantityOut = currentQuantityOut + item.quantity
+            const newCurrentStock = Math.max(0, currentStock - item.quantity) // Prevent negative stock
+            
+            await query(
+              `UPDATE inventory 
+               SET quantity_out = $1, 
+                   current_stock = $2,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $3`,
+              [newQuantityOut, newCurrentStock, inventory.id]
+            )
+          }
+        }
       }
     }
     
@@ -161,6 +210,7 @@ export async function POST(request: NextRequest) {
       totalAmount: parseFloat(completeSale.total_amount),
       paymentMode: completeSale.payment_mode,
       upiTransactionId: completeSale.upi_transaction_id || undefined,
+      saleImage: completeSale.sale_image || undefined,
       createdAt: completeSale.created_at.toISOString(),
     }
     
