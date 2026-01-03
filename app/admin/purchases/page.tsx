@@ -315,7 +315,7 @@ export default function PurchasesPage() {
           category: item.category || 'Custom',
           sizes: item.sizes || [],
           fabricType: item.fabricType || undefined,
-          quantity: parseInt(item.quantity) || 0, // Ensure quantity is an integer
+          quantity: typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0), // Ensure quantity is an integer
           pricePerPiece: parseFloat(item.pricePerPiece) || 0,
           totalAmount: parseFloat(item.totalAmount) || 0,
           productImages: item.productImages || [],
