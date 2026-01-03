@@ -460,8 +460,8 @@ export const storage = {
     
     // Recalculate total if quantity or price changes
     if (updates.quantity !== undefined || updates.pricePerPiece !== undefined) {
-      const quantity = updates.quantity ?? allOrders[index].quantity
-      const pricePerPiece = updates.pricePerPiece ?? allOrders[index].pricePerPiece
+      const quantity = updates.quantity ?? allOrders[index].quantity ?? 0
+      const pricePerPiece = updates.pricePerPiece ?? allOrders[index].pricePerPiece ?? 0
       updates.totalAmount = quantity * pricePerPiece
     }
     
