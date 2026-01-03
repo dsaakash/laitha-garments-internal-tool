@@ -276,7 +276,7 @@ export async function POST(request: NextRequest) {
         const mergedSizes = Array.from(new Set([...existingSizes, ...newSizes]))
         
         // Update stock: increase quantity_in and current_stock by the exact purchase order quantity
-        const purchaseQuantity = parseInt(item.quantity) || 0
+        const purchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
         const currentQuantityIn = parseInt(existing.quantity_in) || 0
         const currentStock = parseInt(existing.current_stock) || 0
         const newQuantityIn = currentQuantityIn + purchaseQuantity
@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
         )
       } else {
         // New inventory item - set initial stock to the exact purchase order quantity
-        const purchaseQuantity = parseInt(item.quantity) || 0
+        const purchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
         console.log(`📦 Creating new inventory item ${item.productName} with initial stock: ${purchaseQuantity}`)
         
         await query(

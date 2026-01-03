@@ -154,7 +154,7 @@ export async function PUT(
         const mergedSizes = Array.from(new Set([...existingSizes, ...newSizes]))
         
         // Calculate stock difference: new quantity - old quantity
-        const newPurchaseQuantity = parseInt(item.quantity) || 0
+        const newPurchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
         const oldQuantity = oldItemsMap.get(dressCode) || 0
         const quantityDifference = newPurchaseQuantity - oldQuantity
         
@@ -189,7 +189,7 @@ export async function PUT(
         )
       } else {
         // New inventory item - set initial stock to the exact purchase order quantity
-        const purchaseQuantity = parseInt(item.quantity) || 0
+        const purchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
         console.log(`📦 Creating new inventory item ${item.productName} with initial stock: ${purchaseQuantity}`)
         
         await query(
@@ -332,7 +332,7 @@ export async function DELETE(
         const inventory = inventoryResult.rows[0]
         const currentQuantityIn = parseInt(inventory.quantity_in) || 0
         const currentStock = parseInt(inventory.current_stock) || 0
-        const quantity = parseInt(item.quantity) || 0
+        const quantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
         
         const newQuantityIn = Math.max(0, currentQuantityIn - quantity)
         const newCurrentStock = Math.max(0, currentStock - quantity)
