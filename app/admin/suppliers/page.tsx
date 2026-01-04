@@ -616,7 +616,7 @@ export default function SuppliersPage() {
                             <p className="text-sm font-medium text-gray-900">{selectedSupplier.gstPercentage}%</p>
                           </div>
                         )}
-                        {selectedSupplier.gstType === 'rupees' && selectedSupplier.gstAmountRupees > 0 && (
+                        {selectedSupplier.gstType === 'rupees' && selectedSupplier.gstAmountRupees !== undefined && selectedSupplier.gstAmountRupees > 0 && (
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">GST Amount</label>
                             <p className="text-sm font-medium text-gray-900">₹{selectedSupplier.gstAmountRupees}</p>
