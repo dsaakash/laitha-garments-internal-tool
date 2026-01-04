@@ -9,7 +9,11 @@ export interface InventoryItem {
   sizes: string[]
   wholesalePrice: number
   sellingPrice: number
-  imageUrl?: string
+  imageUrl?: string // Kept for backward compatibility
+  productImages?: string[] // Array of image URLs
+  pricingUnit?: 'piece' | 'meter' // Optional: whether item is sold by piece or meter
+  pricePerPiece?: number // Optional price per piece
+  pricePerMeter?: number // Optional price per meter
   fabricType?: string
   supplierName?: string
   supplierAddress?: string
@@ -28,7 +32,15 @@ export interface Sale {
   customerId?: string // Link to customer if exists
   billNumber: string
   items: SaleItem[]
-  totalAmount: number
+  subtotal?: number // Subtotal before discount and GST
+  discountType?: 'percentage' | 'rupees' // Optional discount type
+  discountPercentage?: number // Optional discount percentage
+  discountAmount?: number // Optional discount amount in rupees
+  gstType?: 'percentage' | 'rupees' // Optional GST type
+  gstPercentage?: number // Optional GST percentage
+  gstAmount?: number // Optional GST amount in rupees
+  totalAmount: number // Final total after discount and GST
+  finalTotal?: number // Same as totalAmount, kept for clarity
   paymentMode: string
   upiTransactionId?: string
   saleImage?: string // Image captured as proof of sale
@@ -42,6 +54,9 @@ export interface SaleItem {
   dressCode: string
   size: string
   quantity: number
+  usePerMeter?: boolean // Whether to use per meter pricing
+  meters?: number // Number of meters if using per meter pricing
+  pricePerMeter?: number // Price per meter from inventory
   purchasePrice: number
   sellingPrice: number
   profit: number

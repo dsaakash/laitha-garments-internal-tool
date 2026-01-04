@@ -7,7 +7,9 @@ import { Supplier } from '@/lib/storage'
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [showModal, setShowModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -214,7 +216,14 @@ export default function SuppliersPage() {
                 {suppliers.map((supplier) => {
                   const primaryContact = supplier.contacts?.find(c => c.isPrimary) || supplier.contacts?.[0]
                   return (
-                    <tr key={supplier.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={supplier.id} 
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setSelectedSupplier(supplier)
+                        setShowDetailModal(true)
+                      }}
+                    >
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{supplier.name}</div>
@@ -244,7 +253,7 @@ export default function SuppliersPage() {
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {supplier.gstPercentage ? `${supplier.gstPercentage}%` : '-'}
                       </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center space-x-1 sm:space-x-2">
                         <button
                           onClick={() => handleEdit(supplier)}
@@ -272,12 +281,31 @@ export default function SuppliersPage() {
         )}
 
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-              <h2 className="text-2xl font-bold mb-6">
-                {editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}
-              </h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] sm:max-h-[95vh] flex flex-col overflow-hidden my-auto">
+              {/* Header - Fixed */}
+              <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 sm:py-5 rounded-t-lg">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                    {editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm()
+                      setShowModal(false)
+                    }}
+                    className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center"
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-6 min-h-0" style={{ maxHeight: 'calc(90vh - 140px)' }}>
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" id="supplier-form">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
                   <input
@@ -317,18 +345,18 @@ export default function SuppliersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">GST Number (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">GST Number (optional)</label>
                   <input
                     type="text"
                     value={formData.gstNumber}
                     onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value })}
                     placeholder="e.g., 27AABCU9603R1ZX"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 sm:py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm sm:text-base"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">GST Type</label>
-                  <div className="flex gap-4 mb-3">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-3">
                     <label className="flex items-center">
                       <input
                         type="radio"
@@ -480,25 +508,197 @@ export default function SuppliersPage() {
                   )}
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-4">
+                </form>
+              </div>
+              
+              {/* Footer - Fixed */}
+              <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 sm:px-6 py-4 sm:py-5 rounded-b-lg shadow-lg">
+                <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
                   <button
                     type="button"
                     onClick={() => {
                       resetForm()
                       setShowModal(false)
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                    form="supplier-form"
+                    className="w-full sm:w-auto px-4 py-2.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium transition-colors"
                   >
                     {editingSupplier ? 'Update' : 'Add'} Supplier
                   </button>
                 </div>
-              </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Supplier Detail Modal */}
+        {showDetailModal && selectedSupplier && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] sm:max-h-[95vh] flex flex-col overflow-hidden my-auto">
+              {/* Header */}
+              <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 sm:px-6 py-4 sm:py-5 rounded-t-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl sm:text-3xl">🏭</span>
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold">{selectedSupplier.name}</h2>
+                      <p className="text-sm text-purple-100 mt-1">Supplier Details</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDetailModal(false)
+                      setSelectedSupplier(null)
+                    }}
+                    className="text-white hover:text-gray-200 text-2xl leading-none w-8 h-8 flex items-center justify-center bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all"
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-6 min-h-0" style={{ maxHeight: 'calc(90vh - 140px)' }}>
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div className="bg-gray-50 rounded-lg p-4 sm:p-5">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <span>📋</span> Basic Information
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Name</label>
+                        <p className="text-sm font-medium text-gray-900">{selectedSupplier.name}</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
+                        <p className="text-sm text-gray-900">{selectedSupplier.phone || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                        <p className="text-sm text-gray-900">{selectedSupplier.email || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{selectedSupplier.address || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GST Information */}
+                  {(selectedSupplier.gstNumber || selectedSupplier.gstPercentage || selectedSupplier.gstAmountRupees) && (
+                    <div className="bg-blue-50 rounded-lg p-4 sm:p-5">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <span>🧾</span> GST Information
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {selectedSupplier.gstNumber && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">GST Number</label>
+                            <p className="text-sm font-medium text-gray-900">{selectedSupplier.gstNumber}</p>
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">GST Type</label>
+                          <p className="text-sm text-gray-900 capitalize">{selectedSupplier.gstType || 'Not Set'}</p>
+                        </div>
+                        {selectedSupplier.gstType === 'percentage' && selectedSupplier.gstPercentage > 0 && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">GST Percentage</label>
+                            <p className="text-sm font-medium text-gray-900">{selectedSupplier.gstPercentage}%</p>
+                          </div>
+                        )}
+                        {selectedSupplier.gstType === 'rupees' && selectedSupplier.gstAmountRupees > 0 && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">GST Amount</label>
+                            <p className="text-sm font-medium text-gray-900">₹{selectedSupplier.gstAmountRupees}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contact Persons */}
+                  {selectedSupplier.contacts && selectedSupplier.contacts.length > 0 ? (
+                    <div className="bg-green-50 rounded-lg p-4 sm:p-5">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <span>👥</span> Contact Persons ({selectedSupplier.contacts.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {selectedSupplier.contacts.map((contact, index) => (
+                          <div key={index} className="bg-white rounded-lg p-4 border border-green-200">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-900">Contact {index + 1}</span>
+                                {contact.isPrimary && (
+                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                    Primary
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Name</label>
+                                <p className="text-sm text-gray-900">{contact.contactName}</p>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
+                                <p className="text-sm text-gray-900">{contact.phone}</p>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">WhatsApp</label>
+                                <p className="text-sm text-gray-900">{contact.whatsappNumber || '-'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4 sm:p-5">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                        <span>👥</span> Contact Persons
+                      </h3>
+                      <p className="text-sm text-gray-500">No contact persons added</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Footer */}
+              <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 sm:px-6 py-4 sm:py-5 rounded-b-lg shadow-lg">
+                <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDetailModal(false)
+                      setSelectedSupplier(null)
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDetailModal(false)
+                      handleEdit(selectedSupplier)
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium transition-colors"
+                  >
+                    ✏️ Edit Supplier
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

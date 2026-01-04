@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { PurchaseOrder, PurchaseOrderItem, Supplier } from '@/lib/storage'
 import { format } from 'date-fns'
+import * as XLSX from 'xlsx'
 
 export default function PurchasesPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
@@ -494,21 +495,123 @@ export default function PurchasesPage() {
   // Get available categories from inventory
   const availableCategories = ['Custom', 'Kurtis', 'Dresses', 'Sarees', 'Tops', 'Bottoms']
 
+  const exportToExcel = () => {
+    try {
+      // Prepare data for export - flatten purchase orders with their items
+      const exportData: any[] = []
+      
+      orders.forEach(order => {
+        if (order.items && order.items.length > 0) {
+          // If order has multiple items, create a row for each item
+          order.items.forEach((item, index) => {
+            exportData.push({
+              'PO Number': order.customPoNumber || `PO-${order.id}`,
+              'Date': format(new Date(order.date), 'dd/MM/yyyy'),
+              'Supplier Name': order.supplierName,
+              'Product Name': item.productName,
+              'Category': item.category || '',
+              'Sizes': Array.isArray(item.sizes) ? item.sizes.join(', ') : '',
+              'Fabric Type': item.fabricType || '',
+              'Quantity': item.quantity,
+              'Price Per Piece (₹)': item.pricePerPiece,
+              'Item Total (₹)': item.totalAmount,
+              'Subtotal (₹)': order.subtotal || order.totalAmount,
+              'GST Type': order.gstType || '',
+              'GST Percentage': order.gstPercentage || '',
+              'GST Amount (₹)': order.gstAmount || '',
+              'Grand Total (₹)': order.grandTotal || order.totalAmount,
+              'Notes': order.notes || '',
+              'Created At': new Date(order.createdAt).toLocaleDateString(),
+            })
+          })
+        } else {
+          // Legacy single-item order
+          exportData.push({
+            'PO Number': order.customPoNumber || `PO-${order.id}`,
+            'Date': format(new Date(order.date), 'dd/MM/yyyy'),
+            'Supplier Name': order.supplierName,
+            'Product Name': order.productName || '',
+            'Category': '',
+            'Sizes': Array.isArray(order.sizes) ? order.sizes.join(', ') : '',
+            'Fabric Type': order.fabricType || '',
+            'Quantity': order.quantity || 0,
+            'Price Per Piece (₹)': order.pricePerPiece || 0,
+            'Item Total (₹)': order.totalAmount,
+            'Subtotal (₹)': order.subtotal || order.totalAmount,
+            'GST Type': order.gstType || '',
+            'GST Percentage': order.gstPercentage || '',
+            'GST Amount (₹)': order.gstAmount || '',
+            'Grand Total (₹)': order.grandTotal || order.totalAmount,
+            'Notes': order.notes || '',
+            'Created At': new Date(order.createdAt).toLocaleDateString(),
+          })
+        }
+      })
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders')
+
+      // Set column widths
+      const colWidths = [
+        { wch: 15 }, // PO Number
+        { wch: 12 }, // Date
+        { wch: 20 }, // Supplier Name
+        { wch: 25 }, // Product Name
+        { wch: 15 }, // Category
+        { wch: 20 }, // Sizes
+        { wch: 15 }, // Fabric Type
+        { wch: 10 }, // Quantity
+        { wch: 18 }, // Price Per Piece
+        { wch: 15 }, // Item Total
+        { wch: 15 }, // Subtotal
+        { wch: 12 }, // GST Type
+        { wch: 15 }, // GST Percentage
+        { wch: 15 }, // GST Amount
+        { wch: 15 }, // Grand Total
+        { wch: 30 }, // Notes
+        { wch: 12 }, // Created At
+      ]
+      ws['!cols'] = colWidths
+
+      // Generate filename with current date
+      const filename = `Purchase_Orders_Export_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+
+      // Save file
+      XLSX.writeFile(wb, filename)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('Failed to export data. Please try again.')
+    }
+  }
+
   return (
     <AdminLayout>
       <div>
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Purchase Orders</h1>
-          <button
-            onClick={() => {
-              resetForm()
-              setShowModal(true)
-            }}
-            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-            disabled={suppliers.length === 0}
-          >
-            ➕ Add Purchase Order
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={exportToExcel}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export to Excel
+            </button>
+            <button
+              onClick={() => {
+                resetForm()
+                setShowModal(true)
+              }}
+              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              disabled={suppliers.length === 0}
+            >
+              ➕ Add Purchase Order
+            </button>
+          </div>
         </div>
 
         {suppliers.length === 0 && (

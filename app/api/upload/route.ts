@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile } from 'fs/promises'
-import { join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { v2 as cloudinary } from 'cloudinary'
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,38 +28,53 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    // Validate file size (max 10MB for Cloudinary)
+    if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
-        { success: false, message: 'File size must be less than 5MB' },
+        { success: false, message: 'File size must be less than 10MB' },
         { status: 400 }
       )
     }
 
+    // Check if Cloudinary is configured
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return NextResponse.json(
+        { success: false, message: 'Cloudinary is not configured. Please check your environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    // Convert file to buffer
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'public', 'uploads')
-    if (!existsSync(uploadsDir)) {
-      mkdirSync(uploadsDir, { recursive: true })
-    }
+    // Convert buffer to base64 data URI
+    const base64 = buffer.toString('base64')
+    const dataURI = `data:${file.type};base64,${base64}`
 
     // Generate unique filename
     const timestamp = Date.now()
-    const filename = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-    const filepath = join(uploadsDir, filename)
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const publicId = `lalitha_garments/${timestamp}_${sanitizedName}`
 
-    // Save file
-    await writeFile(filepath, buffer)
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(dataURI, {
+      public_id: publicId,
+      folder: 'lalitha_garments',
+      resource_type: 'auto',
+      overwrite: false,
+      invalidate: true,
+    })
 
-    // Return public URL
-    const publicUrl = `/uploads/${filename}`
-    return NextResponse.json({ success: true, url: publicUrl })
+    // Return Cloudinary URL
+    return NextResponse.json({ 
+      success: true, 
+      url: result.secure_url // Use secure_url for HTTPS
+    })
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json(
-      { success: false, message: 'Failed to upload file' },
+      { success: false, message: error instanceof Error ? error.message : 'Failed to upload file' },
       { status: 500 }
     )
   }

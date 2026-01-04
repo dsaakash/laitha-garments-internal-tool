@@ -25,7 +25,15 @@ export default function SalesPage() {
       inventoryId: string
       size: string
       quantity: number
+      usePerMeter: boolean
+      meters?: number
     }>,
+    discountType: '' as '' | 'percentage' | 'rupees',
+    discountPercentage: 0,
+    discountAmount: 0,
+    gstType: '' as '' | 'percentage' | 'rupees',
+    gstPercentage: 0,
+    gstAmount: 0,
   })
   const [showCamera, setShowCamera] = useState(false)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
@@ -213,8 +221,18 @@ export default function SalesPage() {
         if (!invItem) throw new Error('Inventory item not found')
         
         const purchasePrice = invItem.wholesalePrice
-        const sellingPrice = invItem.sellingPrice
-        const profit = (sellingPrice - purchasePrice) * itemForm.quantity
+        let sellingPrice = invItem.sellingPrice
+        let quantity = itemForm.quantity
+        let usePerMeter = itemForm.usePerMeter || false
+        let meters = itemForm.meters || 0
+        
+        // If using per meter pricing
+        if (usePerMeter && invItem.pricePerMeter && meters > 0) {
+          sellingPrice = invItem.pricePerMeter
+          quantity = meters
+        }
+        
+        const profit = (sellingPrice - purchasePrice) * quantity
         
         return {
           inventoryId: itemForm.inventoryId,
@@ -222,14 +240,40 @@ export default function SalesPage() {
           dressType: invItem.dressType,
           dressCode: invItem.dressCode,
           size: itemForm.size,
-          quantity: itemForm.quantity,
+          quantity,
+          usePerMeter,
+          meters: usePerMeter ? meters : undefined,
+          pricePerMeter: usePerMeter ? invItem.pricePerMeter : undefined,
           purchasePrice,
           sellingPrice,
           profit,
         }
       })
       
-      const totalAmount = saleItems.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0)
+      // Calculate subtotal
+      const subtotal = saleItems.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0)
+      
+      // Calculate discount
+      let discountAmount = 0
+      if (formData.discountType === 'percentage' && formData.discountPercentage > 0) {
+        discountAmount = (subtotal * formData.discountPercentage) / 100
+      } else if (formData.discountType === 'rupees' && formData.discountAmount > 0) {
+        discountAmount = formData.discountAmount
+      }
+      
+      // Calculate amount after discount
+      const amountAfterDiscount = subtotal - discountAmount
+      
+      // Calculate GST
+      let gstAmount = 0
+      if (formData.gstType === 'percentage' && formData.gstPercentage > 0) {
+        gstAmount = (amountAfterDiscount * formData.gstPercentage) / 100
+      } else if (formData.gstType === 'rupees' && formData.gstAmount > 0) {
+        gstAmount = formData.gstAmount
+      }
+      
+      // Calculate final total
+      const finalTotal = amountAfterDiscount + gstAmount
       
       const response = await fetch('/api/sales', {
         method: 'POST',
@@ -240,7 +284,15 @@ export default function SalesPage() {
           customerId: useCustomer && formData.customerId ? formData.customerId : undefined,
           billNumber: formData.billNumber,
           items: saleItems,
-          totalAmount,
+          subtotal,
+          discountType: formData.discountType || undefined,
+          discountPercentage: formData.discountPercentage || undefined,
+          discountAmount: discountAmount || undefined,
+          gstType: formData.gstType || undefined,
+          gstPercentage: formData.gstPercentage || undefined,
+          gstAmount: gstAmount || undefined,
+          totalAmount: finalTotal,
+          finalTotal,
           paymentMode: formData.paymentMode,
           upiTransactionId: formData.upiTransactionId || undefined,
           saleImage: formData.saleImage || undefined,
@@ -278,6 +330,15 @@ export default function SalesPage() {
     setShowCamera(false)
     setSelectedSticker(null)
     stopCamera()
+    setFormData(prev => ({
+      ...prev,
+      discountType: '' as '' | 'percentage' | 'rupees',
+      discountPercentage: 0,
+      discountAmount: 0,
+      gstType: '' as '' | 'percentage' | 'rupees',
+      gstPercentage: 0,
+      gstAmount: 0,
+    }))
   }
 
   const handleCustomerSelect = (customerId: string) => {
@@ -666,19 +727,71 @@ export default function SalesPage() {
                                 />
                               </div>
                             </div>
+                            {/* Per Meter Pricing Option */}
+                            {selectedItem && selectedItem.pricePerMeter && (
+                              <div className="mb-3 pt-3 border-t border-gray-200">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.usePerMeter || false}
+                                    onChange={(e) => {
+                                      const newItems = [...formData.items]
+                                      newItems[index] = { 
+                                        ...newItems[index], 
+                                        usePerMeter: e.target.checked,
+                                        meters: e.target.checked ? (newItems[index].meters || 0) : undefined
+                                      }
+                                      setFormData({ ...formData, items: newItems })
+                                    }}
+                                    className="rounded"
+                                  />
+                                  <span className="text-sm font-medium text-gray-700">Use Per Meter Pricing (₹{selectedItem.pricePerMeter}/meter)</span>
+                                </label>
+                                {item.usePerMeter && (
+                                  <div className="mt-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Meters *</label>
+                                    <input
+                                      type="number"
+                                      required
+                                      min="0.01"
+                                      step="0.01"
+                                      value={item.meters || ''}
+                                      onChange={(e) => handleItemChange(index, 'meters', parseFloat(e.target.value))}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                      placeholder="e.g., 2.5"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
                             {selectedItem && (
                               <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200">
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-gray-500">Price:</span>
-                                  <span className="text-sm font-semibold text-gray-800">₹{selectedItem.sellingPrice}</span>
+                                  <span className="text-sm font-semibold text-gray-800">
+                                    ₹{item.usePerMeter && selectedItem.pricePerMeter 
+                                      ? selectedItem.pricePerMeter 
+                                      : selectedItem.sellingPrice}
+                                    {item.usePerMeter && '/meter'}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-medium text-gray-500">Profit:</span>
-                                  <span className="text-sm font-semibold text-green-600">₹{selectedItem.sellingPrice - selectedItem.wholesalePrice}/unit</span>
+                                  <span className="text-sm font-semibold text-green-600">
+                                    ₹{((item.usePerMeter && selectedItem.pricePerMeter ? selectedItem.pricePerMeter : selectedItem.sellingPrice) - selectedItem.wholesalePrice).toFixed(2)}
+                                    {item.usePerMeter ? '/meter' : '/unit'}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2 ml-auto">
                                   <span className="text-xs font-medium text-gray-500">Total:</span>
-                                  <span className="text-sm font-bold text-blue-600">₹{(selectedItem.sellingPrice * item.quantity).toLocaleString()}</span>
+                                  <span className="text-sm font-bold text-blue-600">
+                                    ₹{(
+                                      (item.usePerMeter && selectedItem.pricePerMeter && item.meters
+                                        ? selectedItem.pricePerMeter * item.meters
+                                        : selectedItem.sellingPrice * item.quantity)
+                                    ).toLocaleString()}
+                                  </span>
                                 </div>
                               </div>
                             )}
@@ -700,6 +813,206 @@ export default function SalesPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Discount Section */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Discount (Optional)</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Discount Type</label>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            value="percentage"
+                            checked={formData.discountType === 'percentage'}
+                            onChange={(e) => setFormData({ ...formData, discountType: 'percentage' as const, discountAmount: 0 })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">Percentage (%)</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            value="rupees"
+                            checked={formData.discountType === 'rupees'}
+                            onChange={(e) => setFormData({ ...formData, discountType: 'rupees' as const, discountPercentage: 0 })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">Fixed Amount (₹)</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            value=""
+                            checked={formData.discountType === ''}
+                            onChange={(e) => setFormData({ ...formData, discountType: '' as const, discountPercentage: 0, discountAmount: 0 })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">No Discount</span>
+                        </label>
+                      </div>
+                    </div>
+                    {formData.discountType === 'percentage' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Discount Percentage</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.discountPercentage}
+                          onChange={(e) => setFormData({ ...formData, discountPercentage: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="e.g., 10 for 10%"
+                        />
+                      </div>
+                    )}
+                    {formData.discountType === 'rupees' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.discountAmount}
+                          onChange={(e) => setFormData({ ...formData, discountAmount: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="e.g., 500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* GST Section */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">GST (Optional)</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">GST Type</label>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            value="percentage"
+                            checked={formData.gstType === 'percentage'}
+                            onChange={(e) => setFormData({ ...formData, gstType: 'percentage' as const, gstAmount: 0 })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">Percentage (%)</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            value="rupees"
+                            checked={formData.gstType === 'rupees'}
+                            onChange={(e) => setFormData({ ...formData, gstType: 'rupees' as const, gstPercentage: 0 })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">Fixed Amount (₹)</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            value=""
+                            checked={formData.gstType === ''}
+                            onChange={(e) => setFormData({ ...formData, gstType: '' as const, gstPercentage: 0, gstAmount: 0 })}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">No GST</span>
+                        </label>
+                      </div>
+                    </div>
+                    {formData.gstType === 'percentage' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">GST Percentage</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.gstPercentage}
+                          onChange={(e) => setFormData({ ...formData, gstPercentage: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="e.g., 18 for 18%"
+                        />
+                      </div>
+                    )}
+                    {formData.gstType === 'rupees' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">GST Amount (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.gstAmount}
+                          onChange={(e) => setFormData({ ...formData, gstAmount: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="e.g., 500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Total Summary */}
+                {formData.items.length > 0 && (() => {
+                  const subtotal = formData.items.reduce((sum, item) => {
+                    const invItem = inventory.find(i => i.id === item.inventoryId)
+                    if (!invItem) return sum
+                    const price = item.usePerMeter && invItem.pricePerMeter && item.meters
+                      ? invItem.pricePerMeter * item.meters
+                      : invItem.sellingPrice * item.quantity
+                    return sum + price
+                  }, 0)
+                  
+                  const discount = formData.discountType === 'percentage' && formData.discountPercentage > 0
+                    ? (subtotal * formData.discountPercentage) / 100
+                    : formData.discountType === 'rupees' && formData.discountAmount > 0
+                    ? formData.discountAmount
+                    : 0
+                  
+                  const amountAfterDiscount = subtotal - discount
+                  
+                  const gst = formData.gstType === 'percentage' && formData.gstPercentage > 0
+                    ? (amountAfterDiscount * formData.gstPercentage) / 100
+                    : formData.gstType === 'rupees' && formData.gstAmount > 0
+                    ? formData.gstAmount
+                    : 0
+                  
+                  const finalTotal = amountAfterDiscount + gst
+                  
+                  return (
+                    <div className="border-t pt-6">
+                      <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-5 border-2 border-green-200">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Total Summary</h3>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Subtotal:</span>
+                            <span className="font-medium">₹{subtotal.toLocaleString()}</span>
+                          </div>
+                          {discount > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Discount {formData.discountType === 'percentage' ? `(${formData.discountPercentage}%)` : ''}:</span>
+                              <span className="font-medium text-red-600">-₹{discount.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {gst > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">GST {formData.gstType === 'percentage' ? `(${formData.gstPercentage}%)` : ''}:</span>
+                              <span className="font-medium text-blue-600">+₹{gst.toLocaleString()}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-xl font-bold border-t pt-3 mt-3">
+                            <span>Total Amount:</span>
+                            <span className="text-green-600">₹{finalTotal.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Sale Image Capture Section */}
                 <div className="border-t pt-6">

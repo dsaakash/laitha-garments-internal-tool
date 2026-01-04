@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
                    'dressCode', si.dress_code,
                    'size', si.size,
                    'quantity', si.quantity,
+                   'usePerMeter', si.use_per_meter,
+                   'meters', si.meters,
+                   'pricePerMeter', si.price_per_meter,
                    'purchasePrice', si.purchase_price,
                    'sellingPrice', si.selling_price,
                    'profit', si.profit
@@ -60,9 +63,18 @@ export async function GET(request: NextRequest) {
       customerId: row.customer_id ? row.customer_id.toString() : undefined,
       billNumber: row.bill_number,
       items: row.items || [],
+      subtotal: row.subtotal ? parseFloat(row.subtotal) : parseFloat(row.total_amount),
+      discountType: row.discount_type || undefined,
+      discountPercentage: row.discount_percentage ? parseFloat(row.discount_percentage) : undefined,
+      discountAmount: row.discount_amount ? parseFloat(row.discount_amount) : undefined,
+      gstType: row.gst_type || undefined,
+      gstPercentage: row.gst_percentage ? parseFloat(row.gst_percentage) : undefined,
+      gstAmount: row.gst_amount ? parseFloat(row.gst_amount) : undefined,
       totalAmount: parseFloat(row.total_amount),
+      finalTotal: row.final_total ? parseFloat(row.final_total) : parseFloat(row.total_amount),
       paymentMode: row.payment_mode,
       upiTransactionId: row.upi_transaction_id || undefined,
+      saleImage: row.sale_image || undefined,
       createdAt: row.created_at.toISOString(),
     }))
     
@@ -83,15 +95,24 @@ export async function POST(request: NextRequest) {
     // Start transaction - insert sale first
     const saleResult = await query(
       `INSERT INTO sales 
-       (date, party_name, customer_id, bill_number, total_amount, payment_mode, upi_transaction_id, sale_image)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (date, party_name, customer_id, bill_number, subtotal, discount_type, discount_percentage, discount_amount,
+        gst_type, gst_percentage, gst_amount, total_amount, final_total, payment_mode, upi_transaction_id, sale_image)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         body.date,
         body.partyName,
         body.customerId ? parseInt(body.customerId) : null,
         body.billNumber,
+        body.subtotal || body.totalAmount,
+        body.discountType || null,
+        body.discountPercentage || null,
+        body.discountAmount || null,
+        body.gstType || null,
+        body.gstPercentage || null,
+        body.gstAmount || null,
         body.totalAmount,
+        body.finalTotal || body.totalAmount,
         body.paymentMode,
         body.upiTransactionId || null,
         body.saleImage || null,
@@ -107,8 +128,8 @@ export async function POST(request: NextRequest) {
         await query(
           `INSERT INTO sale_items 
            (sale_id, inventory_id, dress_name, dress_type, dress_code, size, 
-            quantity, purchase_price, selling_price, profit)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            quantity, use_per_meter, meters, price_per_meter, purchase_price, selling_price, profit)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [
             saleId,
             item.inventoryId ? parseInt(item.inventoryId) : null,
@@ -117,6 +138,9 @@ export async function POST(request: NextRequest) {
             item.dressCode,
             item.size,
             item.quantity,
+            item.usePerMeter || false,
+            item.meters || null,
+            item.pricePerMeter || null,
             item.purchasePrice,
             item.sellingPrice,
             item.profit,
@@ -134,8 +158,10 @@ export async function POST(request: NextRequest) {
             const inventory = inventoryResult.rows[0]
             const currentQuantityOut = parseInt(inventory.quantity_out) || 0
             const currentStock = parseInt(inventory.current_stock) || 0
-            const newQuantityOut = currentQuantityOut + item.quantity
-            const newCurrentStock = Math.max(0, currentStock - item.quantity) // Prevent negative stock
+            // Use meters if per meter pricing, otherwise use quantity
+            const quantityToDeduct = item.usePerMeter && item.meters ? item.meters : item.quantity
+            const newQuantityOut = currentQuantityOut + quantityToDeduct
+            const newCurrentStock = Math.max(0, currentStock - quantityToDeduct) // Prevent negative stock
             
             await query(
               `UPDATE inventory 

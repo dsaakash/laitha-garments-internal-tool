@@ -15,7 +15,11 @@ export async function GET() {
       sizes: row.sizes || [],
       wholesalePrice: parseFloat(row.wholesale_price),
       sellingPrice: parseFloat(row.selling_price),
+      pricingUnit: row.pricing_unit || undefined,
+      pricePerPiece: row.price_per_piece ? parseFloat(row.price_per_piece) : undefined,
+      pricePerMeter: row.price_per_meter ? parseFloat(row.price_per_meter) : undefined,
       imageUrl: row.image_url || '',
+      productImages: row.product_images ? (Array.isArray(row.product_images) ? row.product_images : JSON.parse(row.product_images)) : (row.image_url ? [row.image_url] : []),
       fabricType: row.fabric_type || '',
       supplierName: row.supplier_name || '',
       supplierAddress: row.supplier_address || '',
@@ -41,11 +45,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
+    const productImages = body.productImages && body.productImages.length > 0 
+      ? JSON.stringify(body.productImages) 
+      : (body.imageUrl ? JSON.stringify([body.imageUrl]) : null)
+    
     const result = await query(
       `INSERT INTO inventory 
        (dress_name, dress_type, dress_code, sizes, wholesale_price, selling_price, 
-        image_url, fabric_type, supplier_name, supplier_address, supplier_phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        pricing_unit, price_per_piece, price_per_meter, image_url, product_images, fabric_type, supplier_name, supplier_address, supplier_phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         body.dressName,
@@ -54,7 +62,11 @@ export async function POST(request: NextRequest) {
         body.sizes || [],
         body.wholesalePrice,
         body.sellingPrice,
+        body.pricingUnit || null,
+        body.pricePerPiece || null,
+        body.pricePerMeter || null,
         body.imageUrl || null,
+        productImages,
         body.fabricType || null,
         body.supplierName || null,
         body.supplierAddress || null,
@@ -71,7 +83,11 @@ export async function POST(request: NextRequest) {
       sizes: item.sizes || [],
       wholesalePrice: parseFloat(item.wholesale_price),
       sellingPrice: parseFloat(item.selling_price),
+      pricingUnit: item.pricing_unit || undefined,
+      pricePerPiece: item.price_per_piece ? parseFloat(item.price_per_piece) : undefined,
+      pricePerMeter: item.price_per_meter ? parseFloat(item.price_per_meter) : undefined,
       imageUrl: item.image_url || '',
+      productImages: item.product_images ? (Array.isArray(item.product_images) ? item.product_images : JSON.parse(item.product_images)) : (item.image_url ? [item.image_url] : []),
       fabricType: item.fabric_type || '',
       supplierName: item.supplier_name || '',
       supplierAddress: item.supplier_address || '',

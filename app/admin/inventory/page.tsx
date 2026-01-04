@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { InventoryItem } from '@/lib/storage'
+import { format } from 'date-fns'
+import * as XLSX from 'xlsx'
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
@@ -18,13 +20,18 @@ export default function InventoryPage() {
     fabricType: '',
     wholesalePrice: '',
     sellingPrice: '',
+    pricingUnit: '' as '' | 'piece' | 'meter',
+    pricePerPiece: '',
+    pricePerMeter: '',
     imageUrl: '',
+    productImages: [] as string[],
     supplierName: '',
     supplierAddress: '',
     supplierPhone: '',
   })
   const [uploading, setUploading] = useState(false)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
+  const [previewImages, setPreviewImages] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showStockModal, setShowStockModal] = useState(false)
   const [showBulkStockModal, setShowBulkStockModal] = useState(false)
@@ -87,7 +94,11 @@ export default function InventoryPage() {
             fabricType: formData.fabricType || undefined,
             wholesalePrice: parseFloat(formData.wholesalePrice),
             sellingPrice: parseFloat(formData.sellingPrice),
+            pricingUnit: formData.pricingUnit || undefined,
+            pricePerPiece: formData.pricePerPiece ? parseFloat(formData.pricePerPiece) : undefined,
+            pricePerMeter: formData.pricePerMeter ? parseFloat(formData.pricePerMeter) : undefined,
             imageUrl: formData.imageUrl || undefined,
+            productImages: formData.productImages.length > 0 ? formData.productImages : undefined,
             supplierName: formData.supplierName || undefined,
             supplierAddress: formData.supplierAddress || undefined,
             supplierPhone: formData.supplierPhone || undefined,
@@ -110,7 +121,11 @@ export default function InventoryPage() {
             fabricType: formData.fabricType || undefined,
             wholesalePrice: parseFloat(formData.wholesalePrice),
             sellingPrice: parseFloat(formData.sellingPrice),
+            pricingUnit: formData.pricingUnit || undefined,
+            pricePerPiece: formData.pricePerPiece ? parseFloat(formData.pricePerPiece) : undefined,
+            pricePerMeter: formData.pricePerMeter ? parseFloat(formData.pricePerMeter) : undefined,
             imageUrl: formData.imageUrl || undefined,
+            productImages: formData.productImages.length > 0 ? formData.productImages : undefined,
             supplierName: formData.supplierName || undefined,
             supplierAddress: formData.supplierAddress || undefined,
             supplierPhone: formData.supplierPhone || undefined,
@@ -174,6 +189,9 @@ export default function InventoryPage() {
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item)
+    const images = item.productImages && item.productImages.length > 0 
+      ? item.productImages 
+      : (item.imageUrl ? [item.imageUrl] : [])
     setFormData({
       dressName: item.dressName,
       dressType: item.dressType,
@@ -182,12 +200,16 @@ export default function InventoryPage() {
       fabricType: item.fabricType || '',
       wholesalePrice: item.wholesalePrice.toString(),
       sellingPrice: item.sellingPrice.toString(),
+      pricingUnit: item.pricingUnit || '',
+      pricePerPiece: item.pricePerPiece?.toString() || '',
+      pricePerMeter: item.pricePerMeter?.toString() || '',
       imageUrl: item.imageUrl || '',
+      productImages: images,
       supplierName: item.supplierName || '',
       supplierAddress: item.supplierAddress || '',
       supplierPhone: item.supplierPhone || '',
     })
-    setPreviewImage(item.imageUrl || null)
+    setPreviewImages(images)
     setShowModal(true)
   }
 
@@ -219,13 +241,17 @@ export default function InventoryPage() {
       fabricType: '',
       wholesalePrice: '',
       sellingPrice: '',
+      pricingUnit: '' as '' | 'piece' | 'meter',
+      pricePerPiece: '',
+      pricePerMeter: '',
       imageUrl: '',
+      productImages: [],
       supplierName: '',
       supplierAddress: '',
       supplierPhone: '',
     })
     setEditingItem(null)
-    setPreviewImage(null)
+    setPreviewImages([])
   }
 
   const handleStockUpdate = async (e: React.FormEvent) => {
@@ -364,12 +390,84 @@ export default function InventoryPage() {
     }
   }
 
+  const exportToExcel = () => {
+    try {
+      // Prepare data for export
+      const exportData = items.map(item => ({
+        'Dress Name': item.dressName,
+        'Dress Type': item.dressType,
+        'Dress Code': item.dressCode,
+        'Sizes': item.sizes.join(', '),
+        'Fabric Type': item.fabricType || '',
+        'Wholesale Price (₹)': item.wholesalePrice,
+        'Selling Price (₹)': item.sellingPrice,
+        'Pricing Unit': item.pricingUnit || '',
+        'Price Per Piece (₹)': item.pricePerPiece || '',
+        'Price Per Meter (₹)': item.pricePerMeter || '',
+        'Supplier Name': item.supplierName || '',
+        'Supplier Address': item.supplierAddress || '',
+        'Supplier Phone': item.supplierPhone || '',
+        'Quantity In': item.quantityIn || 0,
+        'Quantity Out': item.quantityOut || 0,
+        'Current Stock': item.currentStock || 0,
+        'Created At': new Date(item.createdAt).toLocaleDateString(),
+        'Updated At': new Date(item.updatedAt).toLocaleDateString(),
+      }))
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventory')
+
+      // Set column widths
+      const colWidths = [
+        { wch: 20 }, // Dress Name
+        { wch: 15 }, // Dress Type
+        { wch: 15 }, // Dress Code
+        { wch: 20 }, // Sizes
+        { wch: 15 }, // Fabric Type
+        { wch: 18 }, // Wholesale Price
+        { wch: 18 }, // Selling Price
+        { wch: 15 }, // Pricing Unit
+        { wch: 20 }, // Price Per Piece
+        { wch: 20 }, // Price Per Meter
+        { wch: 20 }, // Supplier Name
+        { wch: 30 }, // Supplier Address
+        { wch: 15 }, // Supplier Phone
+        { wch: 12 }, // Quantity In
+        { wch: 12 }, // Quantity Out
+        { wch: 12 }, // Current Stock
+        { wch: 12 }, // Created At
+        { wch: 12 }, // Updated At
+      ]
+      ws['!cols'] = colWidths
+
+      // Generate filename with current date
+      const filename = `Inventory_Export_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+
+      // Save file
+      XLSX.writeFile(wb, filename)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('Failed to export data. Please try again.')
+    }
+  }
+
   return (
     <AdminLayout>
       <div>
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
           <div className="flex gap-3">
+            <button
+              onClick={exportToExcel}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export to Excel
+            </button>
             <button
               onClick={() => {
                 resetForm()
@@ -381,7 +479,7 @@ export default function InventoryPage() {
             </button>
             <button
               onClick={openBulkStockModal}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
               📦 Bulk Stock Update
             </button>
@@ -429,15 +527,16 @@ export default function InventoryPage() {
                   return (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                        {item.imageUrl ? (
+                        {(item.productImages && item.productImages.length > 0) || item.imageUrl ? (
                           <img 
-                            src={item.imageUrl} 
+                            src={item.productImages && item.productImages.length > 0 ? item.productImages[0] : item.imageUrl} 
                             alt={item.dressName} 
                             className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
                             onClick={() => {
                               setSelectedItem(item)
                               setShowDetailModal(true)
                             }}
+                            title={item.productImages && item.productImages.length > 1 ? `${item.productImages.length} images` : ''}
                           />
                         ) : (
                           <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
@@ -606,49 +705,118 @@ export default function InventoryPage() {
                     />
                   </div>
                 </div>
+                
+                {/* Pricing Unit Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Image (optional)</label>
-                  <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Pricing Unit (Optional)</label>
+                  <div className="flex gap-4 mb-3">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        value="piece"
+                        checked={formData.pricingUnit === 'piece'}
+                        onChange={(e) => setFormData({ ...formData, pricingUnit: 'piece' as const, pricePerMeter: '' })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">By Piece</span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        value="meter"
+                        checked={formData.pricingUnit === 'meter'}
+                        onChange={(e) => setFormData({ ...formData, pricingUnit: 'meter' as const, pricePerPiece: '' })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">By Meter</span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        value=""
+                        checked={formData.pricingUnit === ''}
+                        onChange={(e) => setFormData({ ...formData, pricingUnit: '' as const, pricePerPiece: '', pricePerMeter: '' })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">None</span>
+                    </label>
+                  </div>
+                  
+                  {formData.pricingUnit === 'piece' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Piece (₹) (optional)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.pricePerPiece}
+                        onChange={(e) => setFormData({ ...formData, pricePerPiece: e.target.value })}
+                        placeholder="e.g., 500 for ₹500 per piece"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Set price per piece if selling by individual pieces</p>
+                    </div>
+                  )}
+                  
+                  {formData.pricingUnit === 'meter' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Meter (₹) (optional)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.pricePerMeter}
+                        onChange={(e) => setFormData({ ...formData, pricePerMeter: e.target.value })}
+                        placeholder="e.g., 150 for ₹150 per meter"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Set price per meter if selling by meter length</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (optional)</label>
+                  <div className="space-y-3">
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={handleImageUpload}
+                      multiple
+                      onChange={(e) => handleImageUpload(e)}
                       disabled={uploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
                     />
                     {uploading && (
                       <p className="text-sm text-gray-500">Uploading...</p>
                     )}
-                    {(previewImage || formData.imageUrl) && (
-                      <div className="mt-2">
-                        <img
-                          src={previewImage || formData.imageUrl}
-                          alt="Preview"
-                          className="max-w-xs h-32 object-cover rounded border"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({ ...prev, imageUrl: '' }))
-                            setPreviewImage(null)
-                          }}
-                          className="mt-2 text-sm text-red-600 hover:text-red-700"
-                        >
-                          Remove Image
-                        </button>
+                    {previewImages.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-2">
+                        {previewImages.map((imageUrl, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={imageUrl}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-24 object-cover rounded border"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(index)}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Remove image"
+                            >
+                              ×
+                            </button>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleImageUpload(e, index)}
+                              disabled={uploadingIndex === index}
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                              title="Replace image"
+                            />
+                          </div>
+                        ))}
                       </div>
                     )}
-                    <p className="text-xs text-gray-500">Or enter image URL (optional):</p>
-                    <input
-                      type="text"
-                      value={formData.imageUrl}
-                      onChange={(e) => {
-                        setFormData({ ...formData, imageUrl: e.target.value })
-                        setPreviewImage(e.target.value || null)
-                      }}
-                      placeholder="https://... or /uploads/..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
+                    <p className="text-xs text-gray-500">You can upload multiple images. Click on an image to replace it.</p>
                   </div>
                 </div>
 
@@ -730,14 +898,27 @@ export default function InventoryPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Image Section */}
+                {/* Images Section */}
                 <div>
-                  {selectedItem.imageUrl ? (
-                    <img
-                      src={selectedItem.imageUrl}
-                      alt={selectedItem.dressName}
-                      className="w-full h-96 object-cover rounded-lg border-2 border-gray-200"
-                    />
+                  {(selectedItem.productImages && selectedItem.productImages.length > 0) || selectedItem.imageUrl ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {((selectedItem.productImages && selectedItem.productImages.length > 0) ? selectedItem.productImages : [selectedItem.imageUrl]).map((imageUrl, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={imageUrl}
+                              alt={`${selectedItem.dressName} - Image ${index + 1}`}
+                              className="w-full h-96 object-cover rounded-lg border-2 border-gray-200"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {selectedItem.productImages && selectedItem.productImages.length > 1 && (
+                        <p className="text-sm text-gray-500 text-center">
+                          {selectedItem.productImages.length} images
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400">
                       No Image Available
