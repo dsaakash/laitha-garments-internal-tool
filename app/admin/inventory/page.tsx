@@ -147,44 +147,89 @@ export default function InventoryPage() {
     }
   }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, replaceIndex?: number) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
-      return
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB')
-      return
-    }
-
-    setUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        setFormData(prev => ({ ...prev, imageUrl: data.url }))
-        setPreviewImage(data.url)
-      } else {
-        alert(data.message || 'Failed to upload image')
+    // Handle multiple files or single file
+    const filesToUpload = Array.from(files)
+    
+    // Validate all files
+    for (const file of filesToUpload) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select image files only')
+        return
       }
-    } catch (error) {
-      alert('Failed to upload image. Please try again.')
-    } finally {
-      setUploading(false)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB')
+        return
+      }
     }
+
+    // If replacing at specific index, only process first file
+    if (replaceIndex !== undefined) {
+      setUploadingIndex(replaceIndex)
+      const file = filesToUpload[0]
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          const newImages = [...previewImages]
+          newImages[replaceIndex] = data.url
+          setPreviewImages(newImages)
+          setFormData(prev => ({
+            ...prev,
+            productImages: newImages
+          }))
+        } else {
+          alert(data.message || 'Failed to upload image')
+        }
+      } catch (error) {
+        alert('Failed to upload image. Please try again.')
+      } finally {
+        setUploadingIndex(null)
+      }
+    } else {
+      // Adding new images
+      setUploading(true)
+      try {
+        const uploadPromises = filesToUpload.map(async (file) => {
+          const formData = new FormData()
+          formData.append('file', file)
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          })
+          const data = await response.json()
+          if (!data.success) {
+            throw new Error(data.message || 'Upload failed')
+          }
+          return data.url
+        })
+
+        const uploadedUrls = await Promise.all(uploadPromises)
+        const newImages = [...previewImages, ...uploadedUrls]
+        setPreviewImages(newImages)
+        setFormData(prev => ({
+          ...prev,
+          productImages: newImages
+        }))
+      } catch (error) {
+        alert('Failed to upload image. Please try again.')
+      } finally {
+        setUploading(false)
+      }
+    }
+    
+    // Reset input
+    e.target.value = ''
   }
 
   const handleEdit = (item: InventoryItem) => {
