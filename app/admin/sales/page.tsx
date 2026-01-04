@@ -323,22 +323,25 @@ export default function SalesPage() {
       paymentMode: 'Cash',
       upiTransactionId: '',
       saleImage: '',
-      items: [],
-    })
-    setUseCustomer(false)
-    setCapturedImage(null)
-    setShowCamera(false)
-    setSelectedSticker(null)
-    stopCamera()
-    setFormData(prev => ({
-      ...prev,
+      items: [] as Array<{
+        inventoryId: string
+        size: string
+        quantity: number
+        usePerMeter: boolean
+        meters?: number
+      }>,
       discountType: '' as '' | 'percentage' | 'rupees',
       discountPercentage: 0,
       discountAmount: 0,
       gstType: '' as '' | 'percentage' | 'rupees',
       gstPercentage: 0,
       gstAmount: 0,
-    }))
+    })
+    setUseCustomer(false)
+    setCapturedImage(null)
+    setShowCamera(false)
+    setSelectedSticker(null)
+    stopCamera()
   }
 
   const handleCustomerSelect = (customerId: string) => {
