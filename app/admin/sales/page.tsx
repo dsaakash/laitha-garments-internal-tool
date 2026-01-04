@@ -92,7 +92,7 @@ export default function SalesPage() {
   const handleAddItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { inventoryId: '', size: '', quantity: 1 }],
+      items: [...formData.items, { inventoryId: '', size: '', quantity: 1, usePerMeter: false }],
     })
   }
 
