@@ -232,6 +232,15 @@ export default function InventoryPage() {
     e.target.value = ''
   }
 
+  const handleRemoveImage = (index: number) => {
+    const newImages = previewImages.filter((_, i) => i !== index)
+    setPreviewImages(newImages)
+    setFormData(prev => ({
+      ...prev,
+      productImages: newImages
+    }))
+  }
+
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item)
     const images = item.productImages && item.productImages.length > 0 
