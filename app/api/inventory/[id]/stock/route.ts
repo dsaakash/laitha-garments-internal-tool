@@ -17,9 +17,9 @@ export async function POST(
     }
 
     const quantity = parseInt(body.quantity)
-    if (isNaN(quantity) || quantity <= 0) {
+    if (isNaN(quantity) || quantity < 0) {
       return NextResponse.json(
-        { success: false, message: 'Invalid quantity' },
+        { success: false, message: 'Invalid quantity. Quantity must be a positive number.' },
         { status: 400 }
       )
     }
@@ -42,9 +42,23 @@ export async function POST(
     let newQuantityOut = parseInt(current.quantity_out) || 0
     let newCurrentStock = parseInt(current.current_stock) || 0
 
-    if (body.type === 'in') {
+    if (body.type === 'set') {
+      // Set current_stock directly, calculate quantity_in based on quantity_out
+      newCurrentStock = quantity
+      newQuantityIn = newCurrentStock + newQuantityOut
+    } else if (body.type === 'in') {
       newQuantityIn += quantity
       newCurrentStock += quantity
+    } else if (body.type === 'remove-in') {
+      // Decrease quantity_in
+      if (newQuantityIn < quantity) {
+        return NextResponse.json(
+          { success: false, message: `Cannot remove more than current quantity_in (${newQuantityIn}).` },
+          { status: 400 }
+        )
+      }
+      newQuantityIn -= quantity
+      newCurrentStock -= quantity
     } else if (body.type === 'out') {
       newQuantityOut += quantity
       newCurrentStock -= quantity
@@ -54,11 +68,66 @@ export async function POST(
           { status: 400 }
         )
       }
+    } else if (body.type === 'remove-out') {
+      // Decrease quantity_out (reverse a sale/removal)
+      if (newQuantityOut <= 0) {
+        return NextResponse.json(
+          { success: false, message: `Cannot decrease sold quantity. Current sold quantity is ${newQuantityOut}.` },
+          { status: 400 }
+        )
+      }
+      if (newQuantityOut < quantity) {
+        // If trying to remove more than available, just set to 0
+        const actualDecrease = newQuantityOut
+        newQuantityOut = 0
+        newCurrentStock += actualDecrease
+      } else {
+        newQuantityOut -= quantity
+        newCurrentStock += quantity // Stock increases when we remove from quantity_out
+      }
+    } else if (body.type === 'add-stock') {
+      // Directly add to current_stock, adjust quantity_in
+      newCurrentStock += quantity
+      newQuantityIn = newCurrentStock + newQuantityOut
+    } else if (body.type === 'remove-stock') {
+      // Directly remove from current_stock, adjust quantity_in
+      if (newCurrentStock < quantity) {
+        return NextResponse.json(
+          { success: false, message: `Cannot remove more than current stock (${newCurrentStock}).` },
+          { status: 400 }
+        )
+      }
+      newCurrentStock -= quantity
+      newQuantityIn = newCurrentStock + newQuantityOut
     } else {
       return NextResponse.json(
-        { success: false, message: 'Invalid stock type. Must be "in" or "out"' },
+        { success: false, message: 'Invalid stock type. Must be "in", "remove-in", "out", "remove-out", "add-stock", "remove-stock", or "set"' },
         { status: 400 }
       )
+    }
+
+    // Validate: quantity_in should never be negative
+    if (newQuantityIn < 0) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid operation. Quantity In cannot be negative.' },
+        { status: 400 }
+      )
+    }
+    
+    // Validate: quantity_out should never be negative
+    if (newQuantityOut < 0) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid operation. Quantity Out cannot be negative.' },
+        { status: 400 }
+      )
+    }
+    
+    // Validate relationship: current_stock = quantity_in - quantity_out
+    const calculatedStock = newQuantityIn - newQuantityOut
+    if (newCurrentStock !== calculatedStock) {
+      // Auto-correct to maintain relationship
+      console.warn(`Stock relationship mismatch for inventory ${id}. Auto-correcting: current_stock ${newCurrentStock} → ${calculatedStock}`)
+      newCurrentStock = calculatedStock
     }
 
     // Update inventory

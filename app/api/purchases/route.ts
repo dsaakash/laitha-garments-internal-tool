@@ -278,9 +278,17 @@ export async function POST(request: NextRequest) {
         // Update stock: increase quantity_in and current_stock by the exact purchase order quantity
         const purchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
         const currentQuantityIn = parseInt(existing.quantity_in) || 0
+        const currentQuantityOut = parseInt(existing.quantity_out) || 0
         const currentStock = parseInt(existing.current_stock) || 0
         const newQuantityIn = currentQuantityIn + purchaseQuantity
-        const newCurrentStock = currentStock + purchaseQuantity
+        // Maintain relationship: current_stock = quantity_in - quantity_out
+        const newCurrentStock = newQuantityIn - currentQuantityOut
+        
+        // Validate: quantity_in should never be negative
+        if (newQuantityIn < 0) {
+          console.error(`❌ Invalid stock update for ${item.productName}: quantity_in would be negative (${newQuantityIn}). Skipping.`)
+          continue
+        }
         
         console.log(`📦 Updating stock for ${item.productName}: Adding ${purchaseQuantity} units (Current: ${currentStock} → New: ${newCurrentStock})`)
         
@@ -308,13 +316,14 @@ export async function POST(request: NextRequest) {
       } else {
         // New inventory item - set initial stock to the exact purchase order quantity
         const purchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
+        // For new items, quantity_out starts at 0, so current_stock = quantity_in
         console.log(`📦 Creating new inventory item ${item.productName} with initial stock: ${purchaseQuantity}`)
         
         await query(
           `INSERT INTO inventory 
            (dress_name, dress_type, dress_code, sizes, wholesale_price, selling_price,
-            image_url, fabric_type, supplier_name, quantity_in, current_stock)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            image_url, fabric_type, supplier_name, quantity_in, quantity_out, current_stock)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             item.productName,
             item.category || 'Custom',
@@ -326,7 +335,8 @@ export async function POST(request: NextRequest) {
             item.fabricType,
             body.supplierName,
             purchaseQuantity, // quantity_in = purchase order quantity
-            purchaseQuantity, // current_stock = purchase order quantity
+            0, // quantity_out starts at 0
+            purchaseQuantity, // current_stock = quantity_in - quantity_out = purchaseQuantity - 0
           ]
         )
       }

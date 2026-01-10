@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const result = await query(
-      'SELECT * FROM inventory ORDER BY created_at DESC'
+    const { searchParams } = new URL(request.url)
+    const supplier = searchParams.get('supplier')
+    
+    let queryText = 'SELECT * FROM inventory'
+    const params: any[] = []
+    
+    if (supplier && supplier !== 'All') {
+      queryText += ' WHERE supplier_name = $1'
+      params.push(supplier)
+    }
+    
+    queryText += ' ORDER BY created_at DESC'
+    
+    const result = await query(queryText, params.length > 0 ? params : undefined)
+    
+    // Get unique suppliers for filter dropdown
+    const suppliersResult = await query(
+      'SELECT DISTINCT supplier_name FROM inventory WHERE supplier_name IS NOT NULL AND supplier_name != \'\' ORDER BY supplier_name'
     )
+    const suppliers = suppliersResult.rows.map((row: any) => row.supplier_name).filter(Boolean)
     
     const items = result.rows.map(row => ({
       id: row.id.toString(),
@@ -31,7 +48,11 @@ export async function GET() {
       updatedAt: row.updated_at.toISOString(),
     }))
     
-    return NextResponse.json({ success: true, data: items })
+    return NextResponse.json({ 
+      success: true, 
+      data: items,
+      suppliers: suppliers
+    })
   } catch (error) {
     console.error('Inventory fetch error:', error)
     return NextResponse.json(

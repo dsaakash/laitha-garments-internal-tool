@@ -156,12 +156,14 @@ export async function POST(request: NextRequest) {
           
           if (inventoryResult.rows.length > 0) {
             const inventory = inventoryResult.rows[0]
+            const currentQuantityIn = parseInt(inventory.quantity_in) || 0
             const currentQuantityOut = parseInt(inventory.quantity_out) || 0
             const currentStock = parseInt(inventory.current_stock) || 0
             // Use meters if per meter pricing, otherwise use quantity
             const quantityToDeduct = item.usePerMeter && item.meters ? item.meters : item.quantity
             const newQuantityOut = currentQuantityOut + quantityToDeduct
-            const newCurrentStock = Math.max(0, currentStock - quantityToDeduct) // Prevent negative stock
+            // Maintain relationship: current_stock = quantity_in - quantity_out
+            const newCurrentStock = Math.max(0, currentQuantityIn - newQuantityOut) // Prevent negative stock
             
             await query(
               `UPDATE inventory 
@@ -181,10 +183,12 @@ export async function POST(request: NextRequest) {
           
           if (inventoryResult.rows.length > 0) {
             const inventory = inventoryResult.rows[0]
+            const currentQuantityIn = parseInt(inventory.quantity_in) || 0
             const currentQuantityOut = parseInt(inventory.quantity_out) || 0
             const currentStock = parseInt(inventory.current_stock) || 0
             const newQuantityOut = currentQuantityOut + item.quantity
-            const newCurrentStock = Math.max(0, currentStock - item.quantity) // Prevent negative stock
+            // Maintain relationship: current_stock = quantity_in - quantity_out
+            const newCurrentStock = Math.max(0, currentQuantityIn - newQuantityOut) // Prevent negative stock
             
             await query(
               `UPDATE inventory 

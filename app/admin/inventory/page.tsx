@@ -33,11 +33,14 @@ export default function InventoryPage() {
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [previewImages, setPreviewImages] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [supplierFilter, setSupplierFilter] = useState('All')
+  const [suppliers, setSuppliers] = useState<string[]>([])
+  const [groupBySupplier, setGroupBySupplier] = useState(false)
   const [showStockModal, setShowStockModal] = useState(false)
   const [showBulkStockModal, setShowBulkStockModal] = useState(false)
   const [stockFormData, setStockFormData] = useState({
     itemId: '',
-    type: 'in' as 'in' | 'out',
+    type: 'in' as 'in' | 'out' | 'remove-out',
     quantity: '',
     notes: '',
   })
@@ -50,14 +53,22 @@ export default function InventoryPage() {
   useEffect(() => {
     loadItems()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery])
+  }, [searchQuery, supplierFilter])
 
   const loadItems = async () => {
     try {
-      const response = await fetch('/api/inventory')
+      const url = supplierFilter && supplierFilter !== 'All' 
+        ? `/api/inventory?supplier=${encodeURIComponent(supplierFilter)}`
+        : '/api/inventory'
+      const response = await fetch(url)
       const result = await response.json()
       if (result.success) {
         let filteredItems = result.data
+        
+        // Store suppliers list
+        if (result.suppliers) {
+          setSuppliers(result.suppliers)
+        }
         
         // Apply search filter
         if (searchQuery.trim()) {
@@ -334,7 +345,12 @@ export default function InventoryPage() {
         return
       }
 
-      alert(`Stock ${stockFormData.type === 'in' ? 'added' : 'removed'} successfully!`)
+      const successMessages: Record<string, string> = {
+        'in': 'Stock added successfully!',
+        'out': 'Stock removed successfully!',
+        'remove-out': 'Quantity Out reversed successfully!'
+      }
+      alert(successMessages[stockFormData.type] || 'Stock updated successfully!')
       setShowStockModal(false)
       setStockFormData({
         itemId: '',
@@ -349,7 +365,7 @@ export default function InventoryPage() {
     }
   }
 
-  const openStockModal = (item: InventoryItem, type: 'in' | 'out') => {
+  const openStockModal = (item: InventoryItem, type: 'in' | 'out' | 'remove-out') => {
     setStockFormData({
       itemId: item.id,
       type,
@@ -357,6 +373,57 @@ export default function InventoryPage() {
       notes: '',
     })
     setShowStockModal(true)
+  }
+
+  const quickStockUpdate = async (itemId: string, type: string, quantity: number) => {
+    try {
+      const response = await fetch(`/api/inventory/${itemId}/stock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          quantity,
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        alert(result.message || 'Failed to update stock')
+        return
+      }
+
+      // Immediately update the item in the state using the API response
+      if (result.data) {
+        setItems(prevItems => 
+          prevItems.map(item => 
+            item.id === itemId 
+              ? {
+                  ...item,
+                  quantityIn: result.data.quantityIn,
+                  quantityOut: result.data.quantityOut,
+                  currentStock: result.data.currentStock
+                }
+              : item
+          )
+        )
+
+        // Update selectedItem if detail modal is open and showing this item
+        if (showDetailModal && selectedItem && selectedItem.id === itemId) {
+          setSelectedItem(prev => prev ? {
+            ...prev,
+            quantityIn: result.data.quantityIn,
+            quantityOut: result.data.quantityOut,
+            currentStock: result.data.currentStock
+          } : null)
+        }
+      }
+
+      // Also refresh from server to ensure consistency
+      await loadItems()
+    } catch (error) {
+      console.error('Failed to update stock:', error)
+      alert('Failed to update stock')
+    }
   }
 
   const openBulkStockModal = () => {
@@ -540,22 +607,198 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Search and Filter Bar */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Search Inventory</label>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by dress code, dress name, or supplier name..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Search Inventory</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by dress code, dress name, or supplier name..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Supplier</label>
+              <select
+                value={supplierFilter}
+                onChange={(e) => setSupplierFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="All">All Suppliers</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier} value={supplier}>{supplier}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={groupBySupplier}
+                  onChange={(e) => setGroupBySupplier(e.target.checked)}
+                  className="mr-2 w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Group by Supplier</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         {items.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <p className="text-gray-500 text-lg">No inventory items yet. Add your first item!</p>
           </div>
+        ) : groupBySupplier ? (
+          // Grouped by Supplier View
+          (() => {
+            const groupedItems = items.reduce((acc, item) => {
+              const supplier = item.supplierName || 'No Supplier'
+              if (!acc[supplier]) {
+                acc[supplier] = []
+              }
+              acc[supplier].push(item)
+              return acc
+            }, {} as Record<string, InventoryItem[]>)
+            
+            return (
+              <div className="space-y-4">
+                {Object.entries(groupedItems).map(([supplier, supplierItems]) => (
+                  <div key={supplier} className="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div className="bg-purple-50 px-6 py-3 border-b border-purple-200">
+                      <h3 className="text-lg font-semibold text-purple-900">
+                        {supplier} ({supplierItems.length} {supplierItems.length === 1 ? 'item' : 'items'})
+                      </h3>
+                    </div>
+                    <div className="table-wrapper">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dress Name</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Type</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Code</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Sizes</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Wholesale</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Profit</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {supplierItems.map((item) => {
+                            const profit = item.sellingPrice - item.wholesalePrice
+                            return (
+                              <tr 
+                                key={item.id} 
+                                className="hover:bg-gray-50 cursor-pointer"
+                                onClick={() => {
+                                  setSelectedItem(item)
+                                  setShowDetailModal(true)
+                                }}
+                              >
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                                  {(item.productImages && item.productImages.length > 0) || item.imageUrl ? (
+                                    <img 
+                                      src={item.productImages && item.productImages.length > 0 ? item.productImages[0] : item.imageUrl} 
+                                      alt={item.dressName} 
+                                      className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                      onClick={() => {
+                                        setSelectedItem(item)
+                                        setShowDetailModal(true)
+                                      }}
+                                      title={item.productImages && item.productImages.length > 1 ? `${item.productImages.length} images` : ''}
+                                    />
+                                  ) : (
+                                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                                  )}
+                                </td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.dressName}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{item.dressType}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{item.dressCode}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{item.sizes.join(', ')}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹{item.wholesalePrice}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹{item.sellingPrice}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600 hidden sm:table-cell">₹{profit}</td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex flex-col gap-2">
+                                    {/* Available Stock - Primary Control */}
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => quickStockUpdate(item.id, 'add-stock', 1)}
+                                        className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 rounded text-xs font-bold border border-green-200"
+                                        title="Add Available Stock"
+                                      >
+                                        +
+                                      </button>
+                                      <span className={`font-bold text-sm min-w-[60px] text-center ${
+                                        (item.currentStock || 0) > 10 ? 'text-green-600' :
+                                        (item.currentStock || 0) > 0 ? 'text-yellow-600' : 'text-red-600'
+                                      }`}>
+                                        Stock: {item.currentStock || 0}
+                                      </span>
+                                      <button
+                                        onClick={() => quickStockUpdate(item.id, 'remove-stock', 1)}
+                                        className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200"
+                                        title="Remove Available Stock"
+                                        disabled={(item.currentStock || 0) <= 0}
+                                      >
+                                        -
+                                      </button>
+                                    </div>
+                                    
+                                    {/* Quantity Sold (Out) - Primary Control */}
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => quickStockUpdate(item.id, 'out', 1)}
+                                        className="px-2 py-1 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded text-xs font-bold border border-orange-200"
+                                        title="Record Sale (Increase Sold Quantity)"
+                                      >
+                                        +
+                                      </button>
+                                      <span className="text-xs font-medium text-gray-700 min-w-[55px]">Sold: {item.quantityOut || 0}</span>
+                                      <button
+                                        onClick={() => quickStockUpdate(item.id, 'remove-out', 1)}
+                                        className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-xs font-bold border border-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Reverse Sale (Decrease Sold Quantity)"
+                                      >
+                                        -
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center space-x-1 sm:space-x-2">
+                                    <button
+                                      onClick={() => handleEdit(item)}
+                                      className="px-2 py-1.5 sm:px-3 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 rounded-md text-xs sm:text-sm font-medium transition-all shadow-sm hover:shadow-md border border-blue-200 min-w-[50px] sm:min-w-[60px] whitespace-nowrap"
+                                      title="Edit"
+                                    >
+                                      <span className="hidden sm:inline">✏️ </span>Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(item.id)}
+                                      className="px-2 py-1.5 sm:px-3 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 rounded-md text-xs sm:text-sm font-medium transition-all shadow-sm hover:shadow-md border border-red-200 min-w-[50px] sm:min-w-[60px] whitespace-nowrap"
+                                      title="Delete"
+                                    >
+                                      <span className="hidden sm:inline">🗑️ </span>Delete
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()
         ) : (
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="table-wrapper">
@@ -579,7 +822,14 @@ export default function InventoryPage() {
                 {items.map((item) => {
                   const profit = item.sellingPrice - item.wholesalePrice
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={item.id} 
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => {
+                        setSelectedItem(item)
+                        setShowDetailModal(true)
+                      }}
+                    >
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                         {(item.productImages && item.productImages.length > 0) || item.imageUrl ? (
                           <img 
@@ -615,39 +865,54 @@ export default function InventoryPage() {
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹{item.wholesalePrice}</td>
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹{item.sellingPrice}</td>
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600 hidden sm:table-cell">₹{profit}</td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold text-sm ${
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col gap-2">
+                          {/* Available Stock - Primary Control */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => quickStockUpdate(item.id, 'add-stock', 1)}
+                              className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 rounded text-xs font-bold border border-green-200"
+                              title="Add Available Stock"
+                            >
+                              +
+                            </button>
+                            <span className={`font-bold text-sm min-w-[60px] text-center ${
                               (item.currentStock || 0) > 10 ? 'text-green-600' :
                               (item.currentStock || 0) > 0 ? 'text-yellow-600' : 'text-red-600'
                             }`}>
                               Stock: {item.currentStock || 0}
                             </span>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            <div>In: {item.quantityIn || 0}</div>
-                            <div>Out: {item.quantityOut || 0}</div>
-                          </div>
-                          <div className="flex gap-1 mt-1">
                             <button
-                              onClick={() => openStockModal(item, 'in')}
-                              className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 rounded text-xs font-medium border border-green-200"
-                              title="Add Stock"
+                              onClick={() => quickStockUpdate(item.id, 'remove-stock', 1)}
+                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200"
+                              title="Remove Available Stock"
+                              disabled={(item.currentStock || 0) <= 0}
                             >
-                              +In
+                              -
                             </button>
+                          </div>
+                          
+                          {/* Quantity Sold (Out) - Primary Control */}
+                          <div className="flex items-center gap-1">
                             <button
-                              onClick={() => openStockModal(item, 'out')}
-                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded text-xs font-medium border border-red-200"
-                              title="Remove Stock"
+                              onClick={() => quickStockUpdate(item.id, 'out', 1)}
+                              className="px-2 py-1 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded text-xs font-bold border border-orange-200"
+                              title="Record Sale (Increase Sold Quantity)"
                             >
-                              -Out
+                              +
+                            </button>
+                            <span className="text-xs font-medium text-gray-700 min-w-[55px]">Sold: {item.quantityOut || 0}</span>
+                            <button
+                              onClick={() => quickStockUpdate(item.id, 'remove-out', 1)}
+                              className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-xs font-bold border border-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Reverse Sale (Decrease Sold Quantity)"
+                            >
+                              -
                             </button>
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center space-x-1 sm:space-x-2">
                           <button
                             onClick={() => handleEdit(item)}
@@ -1038,9 +1303,9 @@ export default function InventoryPage() {
 
                   <div className="pt-4 border-t">
                     <label className="text-sm font-medium text-gray-500 mb-2 block">Stock Information</label>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <label className="text-xs font-medium text-gray-400">Current Stock</label>
+                        <label className="text-xs font-medium text-gray-400">Available Stock</label>
                         <p className={`text-xl font-bold ${
                           (selectedItem.currentStock || 0) > 10 ? 'text-green-600' :
                           (selectedItem.currentStock || 0) > 0 ? 'text-yellow-600' : 'text-red-600'
@@ -1049,37 +1314,53 @@ export default function InventoryPage() {
                         </p>
                       </div>
                       <div>
-                        <label className="text-xs font-medium text-gray-400">Quantity In</label>
-                        <p className="text-xl font-bold text-blue-600">
-                          {selectedItem.quantityIn || 0}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-400">Quantity Out</label>
+                        <label className="text-xs font-medium text-gray-400">Quantity Sold</label>
                         <p className="text-xl font-bold text-orange-600">
                           {selectedItem.quantityOut || 0}
                         </p>
                       </div>
                     </div>
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        onClick={() => {
-                          setShowDetailModal(false)
-                          openStockModal(selectedItem, 'in')
-                        }}
-                        className="flex-1 px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded text-sm font-medium border border-green-200"
-                      >
-                        + Add Stock
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowDetailModal(false)
-                          openStockModal(selectedItem, 'out')
-                        }}
-                        className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded text-sm font-medium border border-red-200"
-                      >
-                        - Remove Stock
-                      </button>
+                    <div className="mt-2 space-y-3">
+                      {/* Available Stock Quick Actions */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700 min-w-[100px]">Stock:</span>
+                        <button
+                          onClick={() => quickStockUpdate(selectedItem.id, 'add-stock', 1)}
+                          className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 rounded text-sm font-bold border border-green-200"
+                          title="Add Available Stock"
+                        >
+                          +
+                        </button>
+                        <span className="text-sm font-bold min-w-[50px] text-center text-gray-900">{(selectedItem.currentStock || 0)}</span>
+                        <button
+                          onClick={() => quickStockUpdate(selectedItem.id, 'remove-stock', 1)}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded text-sm font-bold border border-red-200"
+                          title="Remove Available Stock"
+                          disabled={(selectedItem.currentStock || 0) <= 0}
+                        >
+                          -
+                        </button>
+                      </div>
+                      
+                      {/* Quantity Sold (Out) Quick Actions */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700 min-w-[100px]">Sold:</span>
+                        <button
+                          onClick={() => quickStockUpdate(selectedItem.id, 'out', 1)}
+                          className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded text-sm font-bold border border-orange-200"
+                          title="Record Sale (Increase Sold Quantity)"
+                        >
+                          +
+                        </button>
+                        <span className="text-sm font-bold min-w-[50px] text-center text-gray-900">{(selectedItem.quantityOut || 0)}</span>
+                        <button
+                          onClick={() => quickStockUpdate(selectedItem.id, 'remove-out', 1)}
+                          className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-sm font-bold border border-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Reverse Sale (Decrease Sold Quantity)"
+                        >
+                          -
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1146,13 +1427,22 @@ export default function InventoryPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
               <h2 className="text-2xl font-bold mb-6">
-                {stockFormData.type === 'in' ? 'Add Stock' : 'Remove Stock'}
+                {stockFormData.type === 'in' ? 'Add Stock' : 
+                 stockFormData.type === 'out' ? 'Remove Stock' : 
+                 'Reverse Quantity Out'}
               </h2>
               <form onSubmit={handleStockUpdate} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quantity {stockFormData.type === 'in' ? 'In' : 'Out'} *
+                    {stockFormData.type === 'in' ? 'Quantity In' : 
+                     stockFormData.type === 'out' ? 'Quantity Out' : 
+                     'Quantity to Reverse'} *
                   </label>
+                  {stockFormData.type === 'remove-out' && (
+                    <p className="text-xs text-gray-500 mb-2">
+                      This will decrease quantity_out and increase current stock. Use this to reverse a sale or incorrect stock removal.
+                    </p>
+                  )}
                   <input
                     type="number"
                     required
@@ -1194,10 +1484,15 @@ export default function InventoryPage() {
                     className={`flex-1 text-white px-4 py-2 rounded-lg transition-colors ${
                       stockFormData.type === 'in'
                         ? 'bg-green-600 hover:bg-green-700'
-                        : 'bg-red-600 hover:bg-red-700'
+                        : stockFormData.type === 'out'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
                     }`}
                   >
-                    {stockFormData.type === 'in' ? 'Add Stock' : 'Remove Stock'}
+                    {stockFormData.type === 'in' ? 'Add Stock' : 
+                     stockFormData.type === 'out' ? 'Remove Stock' : 
+                     'Reverse Out'} 
+                     'Reverse Out'}
                   </button>
                 </div>
               </form>

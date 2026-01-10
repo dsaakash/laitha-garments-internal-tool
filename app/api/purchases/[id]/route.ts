@@ -93,21 +93,34 @@ export async function PUT(
       )
     }
     
-    // Get old quantities BEFORE deleting items
+    // Get old quantities BEFORE deleting items - include fabric_type
     const oldItemsResult = await query(
-      'SELECT product_name, quantity FROM purchase_order_items WHERE purchase_order_id = $1',
+      'SELECT product_name, fabric_type, quantity FROM purchase_order_items WHERE purchase_order_id = $1',
       [id]
     )
     const oldItemsMap = new Map<string, number>()
     oldItemsResult.rows.forEach((row: any) => {
-      const key = `${row.product_name}_${body.items?.find((i: any) => i.productName === row.product_name)?.fabricType || 'standard'}`
+      // Use the old item's fabric_type, not the new item's
+      const oldFabricType = row.fabric_type || 'standard'
+      const key = `${row.product_name}_${oldFabricType}`.replace(/\s+/g, '_').toUpperCase()
       oldItemsMap.set(key, (oldItemsMap.get(key) || 0) + parseInt(row.quantity))
     })
     
-    // Delete existing items and recreate
-    await query('DELETE FROM purchase_order_items WHERE purchase_order_id = $1', [id])
+    // Store old items for deleted items handling
+    const oldItemsForDeletion = oldItemsResult.rows.map((row: any) => ({
+      productName: row.product_name,
+      fabricType: row.fabric_type || 'standard',
+      quantity: parseInt(row.quantity) || 0
+    }))
     
-    // Insert updated items
+    // Start transaction
+    await query('BEGIN')
+    
+    try {
+      // Delete existing items and recreate
+      await query('DELETE FROM purchase_order_items WHERE purchase_order_id = $1', [id])
+      
+      // Insert updated items
     for (const item of items) {
       await query(
         `INSERT INTO purchase_order_items 
@@ -155,14 +168,23 @@ export async function PUT(
         
         // Calculate stock difference: new quantity - old quantity
         const newPurchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
+        // Use the same dressCode format for lookup
         const oldQuantity = oldItemsMap.get(dressCode) || 0
         const quantityDifference = newPurchaseQuantity - oldQuantity
         
         // Update stock: adjust quantity_in and current_stock based on the exact difference
         const currentQuantityIn = parseInt(existing.quantity_in) || 0
+        const currentQuantityOut = parseInt(existing.quantity_out) || 0
         const currentStock = parseInt(existing.current_stock) || 0
         const newQuantityIn = currentQuantityIn + quantityDifference
-        const newCurrentStock = currentStock + quantityDifference
+        // Maintain relationship: current_stock = quantity_in - quantity_out
+        const newCurrentStock = newQuantityIn - currentQuantityOut
+        
+        // Validate: quantity_in should never be negative
+        if (newQuantityIn < 0) {
+          console.error(`❌ Invalid stock update for ${item.productName}: quantity_in would be negative (${newQuantityIn}). Current: ${currentQuantityIn}, Difference: ${quantityDifference}. Skipping.`)
+          continue
+        }
         
         console.log(`📦 Updating stock for ${item.productName}: Change ${quantityDifference > 0 ? '+' : ''}${quantityDifference} units (Old PO: ${oldQuantity}, New PO: ${newPurchaseQuantity}, Stock: ${currentStock} → ${newCurrentStock})`)
         
@@ -187,16 +209,23 @@ export async function PUT(
             existing.id,
           ]
         )
+        
+        // Validate relationship after update
+        const calculatedStock = newQuantityIn - currentQuantityOut
+        if (newCurrentStock !== calculatedStock) {
+          console.warn(`Stock relationship mismatch for inventory ${existing.id}. Expected: ${calculatedStock}, Got: ${newCurrentStock}`)
+        }
       } else {
         // New inventory item - set initial stock to the exact purchase order quantity
         const purchaseQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 0)
+        // For new items, quantity_out starts at 0, so current_stock = quantity_in
         console.log(`📦 Creating new inventory item ${item.productName} with initial stock: ${purchaseQuantity}`)
         
         await query(
           `INSERT INTO inventory 
            (dress_name, dress_type, dress_code, sizes, wholesale_price, selling_price,
-            image_url, fabric_type, supplier_name, quantity_in, current_stock)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            image_url, fabric_type, supplier_name, quantity_in, quantity_out, current_stock)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             item.productName,
             item.category || 'Custom',
@@ -208,10 +237,70 @@ export async function PUT(
             item.fabricType,
             body.supplierName,
             purchaseQuantity, // quantity_in = purchase order quantity
-            purchaseQuantity, // current_stock = purchase order quantity
+            0, // quantity_out starts at 0
+            purchaseQuantity, // current_stock = quantity_in - quantity_out = purchaseQuantity - 0
           ]
         )
       }
+    }
+    
+    // Handle deleted items - items that were in old list but not in new list
+    const newItemsKeys = new Set(
+      items.map((item: any) => {
+        const fabricType = item.fabricType || 'standard'
+        return `${item.productName}_${fabricType}`.replace(/\s+/g, '_').toUpperCase()
+      })
+    )
+    
+    for (const oldItem of oldItemsForDeletion) {
+      const oldItemKey = `${oldItem.productName}_${oldItem.fabricType}`.replace(/\s+/g, '_').toUpperCase()
+      
+      // If this old item is not in the new items, we need to subtract its stock
+      if (!newItemsKeys.has(oldItemKey)) {
+        const dressCode = oldItemKey
+        const inventoryResult = await query(
+          'SELECT id, quantity_in, quantity_out, current_stock FROM inventory WHERE dress_code = $1',
+          [dressCode]
+        )
+        
+        if (inventoryResult.rows.length > 0) {
+          const inventory = inventoryResult.rows[0]
+          const currentQuantityIn = parseInt(inventory.quantity_in) || 0
+          const currentQuantityOut = parseInt(inventory.quantity_out) || 0
+          const currentStock = parseInt(inventory.current_stock) || 0
+          const quantityToSubtract = oldItem.quantity
+          
+          const newQuantityIn = Math.max(0, currentQuantityIn - quantityToSubtract)
+          // Maintain relationship: current_stock = quantity_in - quantity_out
+          const newCurrentStock = Math.max(0, newQuantityIn - currentQuantityOut)
+          
+          // Validate: quantity_in should never be negative (already handled by Math.max, but log if it would be)
+          if (currentQuantityIn - quantityToSubtract < 0) {
+            console.warn(`⚠️  Warning: Deleting item ${oldItem.productName} would make quantity_in negative. Clamping to 0.`)
+          }
+          
+          console.log(`📦 Removing stock for deleted item ${oldItem.productName}: Subtracting ${quantityToSubtract} units (Stock: ${currentStock} → ${newCurrentStock})`)
+          
+          await query(
+            `UPDATE inventory 
+             SET quantity_in = $1, 
+                 current_stock = $2,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $3`,
+            [newQuantityIn, newCurrentStock, inventory.id]
+          )
+        }
+      }
+    }
+    
+      // Commit transaction
+      await query('COMMIT')
+    } catch (transactionError) {
+      // Rollback transaction on error
+      await query('ROLLBACK').catch((rollbackError) => {
+        console.error('Error rolling back transaction:', rollbackError)
+      })
+      throw transactionError
     }
     
     // Fetch updated order with items
@@ -275,6 +364,10 @@ export async function PUT(
       }
     })
   } catch (error: any) {
+    // Rollback transaction on error
+    await query('ROLLBACK').catch((rollbackError) => {
+      console.error('Error rolling back transaction:', rollbackError)
+    })
     console.error('Purchase order update error:', error)
     return NextResponse.json(
       { 

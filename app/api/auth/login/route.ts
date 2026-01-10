@@ -46,8 +46,21 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('Login error:', error)
+    
+    // Provide more specific error messages for debugging
+    let errorMessage = 'Server error'
+    if (error instanceof Error) {
+      if (error.message.includes('DATABASE_URL')) {
+        errorMessage = 'Database configuration error. Please check your environment variables.'
+      } else if (error.message.includes('connect') || error.message.includes('connection')) {
+        errorMessage = 'Database connection error. Please check your database settings.'
+      } else {
+        errorMessage = error.message
+      }
+    }
+    
     return NextResponse.json(
-      { success: false, message: 'Server error' },
+      { success: false, message: errorMessage },
       { status: 500 }
     )
   }

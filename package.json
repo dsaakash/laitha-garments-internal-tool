@@ -22,7 +22,9 @@
     "migrate-images-cloudinary": "node scripts/migrate-images-to-cloudinary.js",
     "migrate-static-images": "node scripts/migrate-static-images-to-cloudinary.js",
     "check-cloudinary-images": "node scripts/check-cloudinary-images.js",
-    "list-all-images": "node scripts/list-all-images.js"
+    "list-all-images": "node scripts/list-all-images.js",
+    "check-env": "node scripts/check-env.js",
+    "setup-env": "node scripts/setup-env.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
