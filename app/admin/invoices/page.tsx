@@ -22,15 +22,73 @@ export default function InvoicesPage() {
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
+  const [userRole, setUserRole] = useState<'superadmin' | 'admin' | 'user' | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
-    loadData()
+    // Fetch user info first, then load data
+    const fetchUserAndLoadData = async () => {
+      try {
+        // Fetch user info
+        const authRes = await fetch('/api/auth/check', { credentials: 'include' })
+        const authData = await authRes.json()
+        
+        if (authData.authenticated && authData.admin) {
+          let role = (authData.admin.role || 'admin').toLowerCase().trim()
+          if (role === 'super_admin') role = 'superadmin'
+          setUserRole(role as 'superadmin' | 'admin' | 'user')
+          if (authData.admin.email) {
+            setUserEmail(authData.admin.email)
+          }
+          
+          // Load data with user context
+          await loadData(role as 'superadmin' | 'admin' | 'user', authData.admin.email)
+        } else {
+          // Not authenticated, load all data (will redirect anyway)
+          await loadData(null, null)
+        }
+      } catch (err) {
+        console.error('Error fetching user info:', err)
+        await loadData(null, null)
+      }
+    }
+    
+    fetchUserAndLoadData()
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (role: 'superadmin' | 'admin' | 'user' | null, email: string | null) => {
     try {
+      // For users, we need to find their customer by email and filter invoices
+      let salesUrl = '/api/sales'
+      if (role === 'user' && email) {
+        // Fetch customer by email first, then filter sales
+        const customersRes = await fetch('/api/customers')
+        const customersResult = await customersRes.json()
+        
+        if (customersResult.success) {
+          const customer = customersResult.data.find((c: Customer) => 
+            c.email && c.email.toLowerCase() === email.toLowerCase()
+          )
+          
+          if (customer) {
+            // Filter sales by customer_id
+            salesUrl = `/api/sales?customer_id=${customer.id}`
+          } else {
+            // No customer found for this user, show empty list
+            setSales([])
+            setCustomers(customersResult.data)
+            const businessRes = await fetch('/api/business')
+            const businessResult = await businessRes.json()
+            if (businessResult.success && businessResult.data) {
+              setBusinessProfile(businessResult.data)
+            }
+            return
+          }
+        }
+      }
+      
       const [salesRes, businessRes, customersRes] = await Promise.all([
-        fetch('/api/sales'),
+        fetch(salesUrl),
         fetch('/api/business'),
         fetch('/api/customers'),
       ])

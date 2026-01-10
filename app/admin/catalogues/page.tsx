@@ -11,6 +11,7 @@ export default function CataloguesPage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [editingCatalogue, setEditingCatalogue] = useState<Catalogue | null>(null)
+  const [userRole, setUserRole] = useState<'superadmin' | 'admin' | 'user' | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -19,6 +20,20 @@ export default function CataloguesPage() {
 
   useEffect(() => {
     loadData()
+    // Fetch user role
+    fetch('/api/auth/check', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated && data.admin) {
+          let role = (data.admin.role || 'admin').toLowerCase().trim()
+          if (role === 'super_admin') role = 'superadmin'
+          setUserRole(role as 'superadmin' | 'admin' | 'user')
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching user role:', err)
+        setUserRole('admin') // Default
+      })
   }, [])
 
   const loadData = async () => {
@@ -135,26 +150,32 @@ export default function CataloguesPage() {
       <div>
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Catalogues</h1>
-          <button
-            onClick={() => {
-              resetForm()
-              setShowModal(true)
-            }}
-            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            ➕ Create New Catalogue
-          </button>
+          {userRole !== 'user' && (
+            <button
+              onClick={() => {
+                resetForm()
+                setShowModal(true)
+              }}
+              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              ➕ Create New Catalogue
+            </button>
+          )}
         </div>
 
         {catalogues.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <p className="text-gray-500 text-lg mb-4">No catalogues yet. Create your first catalogue!</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
-            >
-              Create Catalogue
-            </button>
+            <p className="text-gray-500 text-lg mb-4">
+              {userRole === 'user' ? 'No catalogues available yet.' : 'No catalogues yet. Create your first catalogue!'}
+            </p>
+            {userRole !== 'user' && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
+              >
+                Create Catalogue
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -169,20 +190,22 @@ export default function CataloguesPage() {
                         <p className="text-sm text-gray-500 mt-1">{catalogue.description}</p>
                       )}
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEdit(catalogue)}
-                        className="text-purple-600 hover:text-purple-900 text-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(catalogue.id)}
-                        className="text-red-600 hover:text-red-900 text-sm"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {userRole !== 'user' && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(catalogue)}
+                          className="text-purple-600 hover:text-purple-900 text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(catalogue.id)}
+                          className="text-red-600 hover:text-red-900 text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-4">
                     <p className="text-sm text-gray-600 mb-2">

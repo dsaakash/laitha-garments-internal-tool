@@ -32,38 +32,59 @@ export async function GET(request: NextRequest) {
       
       const parts = decoded.split(':')
       
-      // Check if we have at least one part (admin ID)
-      if (parts.length === 0 || !parts[0] || parts[0].trim() === '') {
+      let userType: string
+      let userId: string
+      
+      // Handle both old format (adminId:email:timestamp) and new format (userType:userId:email:timestamp)
+      if (parts.length >= 2) {
+        // Check if first part is 'admin' or 'user' (new format)
+        if (parts[0] === 'admin' || parts[0] === 'user') {
+          userType = parts[0].trim()
+          userId = parts[1].trim()
+        } else {
+          // Old format: adminId:email:timestamp (backward compatibility)
+          userType = 'admin'
+          userId = parts[0].trim()
+        }
+      } else {
+        // Invalid format
         const response = NextResponse.json({ authenticated: false }, { status: 401 })
         response.cookies.delete('admin_session')
         return response
       }
       
-      const adminId = parts[0].trim()
-      
-      // Validate admin ID is a valid number
-      const adminIdNum = parseInt(adminId, 10)
-      if (isNaN(adminIdNum) || adminIdNum <= 0 || !Number.isInteger(adminIdNum)) {
-        // Invalid admin ID format - clear the cookie
-        console.log('Invalid admin ID from session:', adminId, 'decoded:', decoded)
+      // Validate user ID is a valid number
+      const userIdNum = parseInt(userId, 10)
+      if (isNaN(userIdNum) || userIdNum <= 0 || !Number.isInteger(userIdNum)) {
+        // Invalid user ID format - clear the cookie
+        console.log('Invalid user ID from session:', userId, 'decoded:', decoded)
         const response = NextResponse.json({ authenticated: false }, { status: 401 })
         response.cookies.delete('admin_session')
         return response
       }
       
-      // Verify admin still exists in database
-      const result = await query(
-        'SELECT id, email, name FROM admins WHERE id = $1',
-        [adminIdNum]
-      )
+      // Verify user still exists in database (check admins or users table based on type)
+      let result
+      if (userType === 'user') {
+        result = await query(
+          'SELECT id, email, name, role FROM users WHERE id = $1',
+          [userIdNum]
+        )
+      } else {
+        // Default to admin (backward compatibility with old sessions)
+        result = await query(
+          'SELECT id, email, name, role FROM admins WHERE id = $1',
+          [userIdNum]
+        )
+      }
       
       if (result.rows.length > 0) {
         return NextResponse.json({ 
           authenticated: true,
-          admin: result.rows[0]
+          admin: result.rows[0] // Keep 'admin' key for backward compatibility
         })
       } else {
-        // Admin not found - clear the cookie
+        // User not found - clear the cookie
         const response = NextResponse.json({ authenticated: false }, { status: 401 })
         response.cookies.delete('admin_session')
         return response

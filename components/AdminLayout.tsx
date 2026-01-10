@@ -15,6 +15,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [userRole, setUserRole] = useState<'superadmin' | 'admin' | 'user' | null>(null)
+  const [userName, setUserName] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     checkAuth().then((auth) => {
@@ -22,6 +25,50 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       setLoading(false)
       if (!auth) {
         router.push('/admin/login')
+      } else {
+        // Fetch current user role after authentication is confirmed
+        fetch('/api/auth/check', { credentials: 'include' })
+          .then(res => res.json())
+          .then(data => {
+            console.log('🔍 Auth check response:', JSON.stringify(data, null, 2))
+            if (data.authenticated && data.admin) {
+              // Get role from response
+              let role = data.admin.role
+              
+              // Handle null/undefined
+              if (!role) {
+                console.warn('⚠️ Role is null/undefined in response, checking database...')
+                // Try to get role from database by making another call
+                role = 'superadmin' // Temporary: default to superadmin if role missing
+              } else {
+                role = role.toLowerCase().trim()
+                // Normalize role values (handle any case variations)
+                if (role === 'super_admin') role = 'superadmin'
+              }
+              
+              console.log('✅ Setting user role to:', role)
+              setUserRole(role as 'superadmin' | 'admin' | 'user')
+              
+              // Set user name and email
+              if (data.admin.name) {
+                setUserName(data.admin.name)
+              }
+              if (data.admin.email) {
+                setUserEmail(data.admin.email)
+              }
+            } else {
+              console.warn('⚠️ No admin data in response')
+              console.warn('   authenticated:', data.authenticated)
+              console.warn('   admin:', data.admin)
+              // Default to superadmin to show all menu items
+              setUserRole('superadmin')
+            }
+          })
+          .catch(err => {
+            console.error('❌ Error fetching user role:', err)
+            // Default to superadmin on error to ensure all menu items are visible
+            setUserRole('superadmin')
+          })
       }
     })
   }, [router])
@@ -52,17 +99,31 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   const navItems = [
-    { href: '/admin/dashboard', label: 'Dashboard', icon: '📊' },
-    { href: '/admin/setup', label: 'Setup Wizard', icon: '🚀' },
-    { href: '/admin/business', label: 'Business Setup', icon: '⚙️' },
-    { href: '/admin/suppliers', label: 'Suppliers', icon: '🏭' },
-    { href: '/admin/purchases', label: 'Purchase Orders', icon: '🛒' },
-    { href: '/admin/inventory', label: 'Inventory', icon: '📦' },
-    { href: '/admin/customers', label: 'Customers', icon: '👥' },
-    { href: '/admin/catalogues', label: 'Catalogues', icon: '📚' },
-    { href: '/admin/sales', label: 'Sales', icon: '💰' },
-    { href: '/admin/invoices', label: 'Invoices', icon: '📄' },
+    { href: '/admin/dashboard', label: 'Dashboard', icon: '📊', roles: ['superadmin', 'admin'] },
+    { href: '/admin/setup', label: 'Setup Wizard', icon: '🚀', roles: ['superadmin', 'admin'] },
+    { href: '/admin/business', label: 'Business Setup', icon: '⚙️', roles: ['superadmin', 'admin'] },
+    { href: '/admin/suppliers', label: 'Suppliers', icon: '🏭', roles: ['superadmin', 'admin'] },
+    { href: '/admin/purchases', label: 'Purchase Orders', icon: '🛒', roles: ['superadmin', 'admin'] },
+    { href: '/admin/inventory', label: 'Inventory', icon: '📦', roles: ['superadmin', 'admin'] },
+    { href: '/admin/customers', label: 'Customers', icon: '👥', roles: ['superadmin', 'admin'] },
+    { href: '/admin/products', label: 'Products', icon: '🛍️', roles: ['user'] },
+    { href: '/admin/catalogues', label: 'Catalogues', icon: '📚', roles: ['superadmin', 'admin'] },
+    { href: '/admin/sales', label: 'Sales', icon: '💰', roles: ['superadmin', 'admin'] },
+    { href: '/admin/invoices', label: 'Invoices', icon: '📄', roles: ['superadmin', 'admin', 'user'] },
+    { href: '/admin/admins', label: 'Admin Management', icon: '👑', roles: ['superadmin'] },
+    { href: '/admin/users', label: 'User Management', icon: '👤', roles: ['superadmin', 'admin'] },
   ]
+  
+  // Filter nav items based on user role
+  const filteredNavItems = (() => {
+    if (!userRole) {
+      // While loading, show minimal items
+      return navItems.filter(item => item.roles.includes('user'))
+    }
+    
+    // Filter based on role
+    return navItems.filter(item => item.roles.includes(userRole))
+  })()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -84,9 +145,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {/* Header */}
           <div className="p-6 border-b border-purple-400/30 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <h1 className="text-2xl font-bold tracking-tight">Lalitha Garments</h1>
-                <p className="text-purple-200 text-sm mt-1 font-medium">Admin Portal</p>
+                <p className="text-purple-200 text-sm mt-1 font-medium">
+                  {userRole === 'user' ? 'User Portal' : 'Admin Portal'}
+                </p>
+                {userName && (
+                  <p className="text-purple-100 text-xs mt-2 font-medium">
+                    👤 {userName}
+                  </p>
+                )}
+                {!userName && userEmail && (
+                  <p className="text-purple-100 text-xs mt-2 font-medium">
+                    👤 {userEmail}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
@@ -101,8 +174,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-purple-400 scrollbar-track-transparent">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item, index) => {
               const isActive = pathname === item.href
+              
               return (
                 <Link
                   key={item.href}

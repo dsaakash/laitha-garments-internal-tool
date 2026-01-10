@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAdmin } from '@/lib/db-auth'
+import { verifyAdmin, verifyUser } from '@/lib/db-auth'
 import { encodeBase64, getNodeEnv } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
@@ -13,19 +13,40 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const admin = await verifyAdmin(email, password)
+    // First try to verify as admin
+    let admin = await verifyAdmin(email, password)
+    let user = null
+    let userType: 'admin' | 'user' = 'admin'
 
     if (admin) {
+      // Admin login successful
+      userType = 'admin'
+    } else {
+      // If not admin, try to verify as regular user
+      user = await verifyUser(email, password)
+      if (user) {
+        userType = 'user'
+      }
+    }
+
+    if (admin || user) {
+      const userId = admin ? admin.id : user!.id
+      const userName = admin ? admin.name : user!.name
+      const userRole = admin ? admin.role : user!.role
+      
       // Create a simple session token (in production, use proper JWT)
-      const sessionToken = encodeBase64(`${admin.id}:${email}:${Date.now()}`)
+      // Include user type in token: admin_id or user_id
+      const sessionToken = encodeBase64(`${userType}:${userId}:${email}:${Date.now()}`)
       
       const response = NextResponse.json({ 
         success: true, 
         message: 'Login successful',
         admin: {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name
+          id: userId,
+          email: email,
+          name: userName,
+          role: userRole,
+          type: userType
         }
       })
       

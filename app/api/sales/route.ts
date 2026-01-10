@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const month = searchParams.get('month')
     const year = searchParams.get('year')
+    const customerId = searchParams.get('customer_id')
     
     let queryText = `
       SELECT s.*, 
@@ -35,6 +36,12 @@ export async function GET(request: NextRequest) {
     const conditions: string[] = []
     const params: any[] = []
     let paramCount = 1
+    
+    if (customerId) {
+      conditions.push(`s.customer_id = $${paramCount}`)
+      params.push(parseInt(customerId))
+      paramCount++
+    }
     
     if (year) {
       conditions.push(`EXTRACT(YEAR FROM s.date) = $${paramCount}`)

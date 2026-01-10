@@ -24,7 +24,10 @@
     "check-cloudinary-images": "node scripts/check-cloudinary-images.js",
     "list-all-images": "node scripts/list-all-images.js",
     "check-env": "node scripts/check-env.js",
-    "setup-env": "node scripts/setup-env.js"
+    "setup-env": "node scripts/setup-env.js",
+    "migrate-roles": "node scripts/run-migration.js",
+    "check-roles": "node scripts/check-admin-roles.js",
+    "check-users-table": "node scripts/check-users-table.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
