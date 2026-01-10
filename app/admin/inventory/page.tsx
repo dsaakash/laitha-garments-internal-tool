@@ -1486,13 +1486,14 @@ export default function InventoryPage() {
                         ? 'bg-green-600 hover:bg-green-700'
                         : stockFormData.type === 'out'
                         ? 'bg-red-600 hover:bg-red-700'
+                        : stockFormData.type === 'remove-out'
+                        ? 'bg-purple-600 hover:bg-purple-700'
                         : 'bg-blue-600 hover:bg-blue-700'
                     }`}
                   >
                     {stockFormData.type === 'in' ? 'Add Stock' : 
                      stockFormData.type === 'out' ? 'Remove Stock' : 
-                     'Reverse Out'} 
-                     'Reverse Out'}
+                     stockFormData.type === 'remove-out' ? 'Reverse Out' : 'Set Stock'}
                   </button>
                 </div>
               </form>
