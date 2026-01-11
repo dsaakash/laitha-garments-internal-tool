@@ -128,6 +128,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { href: '/admin/catalogues', label: 'Catalogues', icon: '📚', roles: ['superadmin', 'admin'] },
     { href: '/admin/sales', label: 'Sales', icon: '💰', roles: ['superadmin', 'admin'] },
     { href: '/admin/invoices', label: 'Invoices', icon: '📄', roles: ['superadmin', 'admin', 'user'] },
+    { href: '/admin/enquiries', label: 'Customer Enquiries', icon: '📧', roles: ['superadmin', 'admin'] },
     { href: '/admin/admins', label: 'Admin Management', icon: '👑', roles: ['superadmin'] },
     { href: '/admin/users', label: 'User Management', icon: '👤', roles: ['superadmin', 'admin'] },
   ]

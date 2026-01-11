@@ -29,6 +29,72 @@ export default function ProductsPage() {
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showEnquiryModal, setShowEnquiryModal] = useState(false)
+  const [enquiryItem, setEnquiryItem] = useState<InventoryItem | null>(null)
+  const [enquiryForm, setEnquiryForm] = useState({
+    name: '',
+    phone: '',
+    fabricType: ''
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [enquirySubmitted, setEnquirySubmitted] = useState(false)
+
+  // Helper function to normalize fabric type for matching
+  const normalizeFabricType = (fabric: string): string => {
+    return fabric.toLowerCase().trim().replace(/\s+/g, ' ')
+  }
+
+  // Common fabric types
+  const fabricTypes = [
+    'Cotton', 'Mul Cotton', 'Silk', 'Georgette', 'Chiffon', 'Linen', 'Rayon', 
+    'Polyester', 'Crepe', 'Satin', 'Velvet', 'Denim', 'Other'
+  ]
+
+  // Reset form when enquiry modal closes and auto-select fabric type when opens
+  useEffect(() => {
+    if (!showEnquiryModal) {
+      setEnquiryForm({ name: '', phone: '', fabricType: '' })
+      setEnquirySubmitted(false)
+      setEnquiryItem(null)
+    } else if (enquiryItem) {
+      // Auto-select fabric type when modal opens
+      let selectedFabricType = ''
+      
+      if (enquiryItem.fabricType) {
+        const productFabricType = enquiryItem.fabricType.trim()
+        const normalizedProductFabric = normalizeFabricType(productFabricType)
+        
+        // Try to find exact match first
+        let matchingFabric = fabricTypes.find(f => 
+          normalizeFabricType(f) === normalizedProductFabric
+        )
+        
+        // If no exact match, try partial match (e.g., "MUL COTTON" matches "Mul Cotton")
+        if (!matchingFabric) {
+          matchingFabric = fabricTypes.find(f => 
+            normalizedProductFabric.includes(normalizeFabricType(f)) ||
+            normalizeFabricType(f).includes(normalizedProductFabric)
+          )
+        }
+        
+        // If still no match, check if it contains "cotton" and map to "Cotton" or "Mul Cotton"
+        if (!matchingFabric && normalizedProductFabric.includes('cotton')) {
+          if (normalizedProductFabric.includes('mul')) {
+            matchingFabric = 'Mul Cotton'
+          } else {
+            matchingFabric = 'Cotton'
+          }
+        }
+        
+        selectedFabricType = matchingFabric || productFabricType
+      }
+      
+      setEnquiryForm(prev => ({ 
+        ...prev, 
+        fabricType: selectedFabricType 
+      }))
+    }
+  }, [showEnquiryModal, enquiryItem])
 
   useEffect(() => {
     loadData()
@@ -87,10 +153,74 @@ export default function ProductsPage() {
     ? inventory
     : inventory.filter(item => getCategory(item.dressType) === selectedCategory)
 
-  const handleWhatsApp = (item: InventoryItem) => {
+  const handleWhatsApp = (item: InventoryItem, enquiryData?: { name: string; phone: string; fabricType: string }) => {
     const whatsappNumber = businessProfile?.whatsappNumber || '917204219541'
-    const message = `Hi, I'm interested in ${item.dressName} (${item.dressCode}). Can you provide more details about availability and pricing?`
+    let message = `Hi, I'm interested in ${item.dressName} (${item.dressCode}).`
+    
+    if (enquiryData) {
+      message += `\n\nMy Details:`
+      message += `\nName: ${enquiryData.name}`
+      message += `\nPhone: ${enquiryData.phone}`
+      if (enquiryData.fabricType) {
+        message += `\nPreferred Fabric Type: ${enquiryData.fabricType}`
+      }
+      message += `\n\nCan you provide more details about availability and pricing?`
+    } else {
+      message += ` Can you provide more details about availability and pricing?`
+    }
+    
     window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank')
+    
+    // Save enquiry to database if enquiry data is provided
+    if (enquiryData) {
+      saveEnquiry(item, enquiryData, 'whatsapp')
+    }
+  }
+
+  const saveEnquiry = async (item: InventoryItem, enquiryData: { name: string; phone: string; fabricType: string }, method: 'form' | 'whatsapp') => {
+    try {
+      await fetch('/api/enquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: enquiryData.name,
+          customerPhone: enquiryData.phone,
+          productId: item.id,
+          productName: item.dressName,
+          productCode: item.dressCode,
+          fabricType: enquiryData.fabricType || null,
+          enquiryMethod: method
+        })
+      })
+    } catch (error) {
+      console.error('Failed to save enquiry:', error)
+    }
+  }
+
+  const handleSubmitEnquiry = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!enquiryItem) return
+
+    if (!enquiryForm.name || !enquiryForm.phone) {
+      alert('Please fill in your name and phone number')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await saveEnquiry(enquiryItem, enquiryForm, 'form')
+      setEnquirySubmitted(true)
+      setEnquiryForm({ name: '', phone: '', fabricType: '' })
+      setTimeout(() => {
+        setEnquirySubmitted(false)
+        setShowEnquiryModal(false)
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to submit enquiry:', error)
+      alert('Failed to submit enquiry. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (loading) {
@@ -207,16 +337,29 @@ export default function ProductsPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleWhatsApp(item)
-                    }}
-                    className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-100 flex items-center justify-center gap-2"
-                  >
-                    <span>💬</span>
-                    Contact on WhatsApp
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEnquiryItem(item)
+                        setShowEnquiryModal(true)
+                      }}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-100 flex items-center justify-center gap-2"
+                    >
+                      <span>📝</span>
+                      Submit Enquiry
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleWhatsApp(item)
+                      }}
+                      className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-100 flex items-center justify-center gap-2"
+                    >
+                      <span>💬</span>
+                      WhatsApp
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -326,6 +469,97 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enquiry Modal */}
+        {showEnquiryModal && enquiryItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-8 max-w-md w-full">
+              <div className="flex justify-between items-start mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Send Enquiry</h2>
+                <button
+                  onClick={() => setShowEnquiryModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Product Info */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <p className="font-semibold text-gray-900">{enquiryItem.dressName}</p>
+                <p className="text-sm text-gray-600">{enquiryItem.dressCode}</p>
+                <p className="text-sm text-purple-600 font-medium mt-1">₹{enquiryItem.sellingPrice}</p>
+              </div>
+              
+              {enquirySubmitted && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-green-700 text-sm">✓ Enquiry submitted successfully! We'll contact you soon.</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitEnquiry} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Your Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={enquiryForm.name}
+                    onChange={(e) => setEnquiryForm({ ...enquiryForm, name: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="Enter your name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={enquiryForm.phone}
+                    onChange={(e) => setEnquiryForm({ ...enquiryForm, phone: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="Enter your phone number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Preferred Fabric Type (Optional)
+                  </label>
+                  <select
+                    value={enquiryForm.fabricType}
+                    onChange={(e) => setEnquiryForm({ ...enquiryForm, fabricType: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Select Fabric Type</option>
+                    {fabricTypes.map((fabric) => (
+                      <option key={fabric} value={fabric}>{fabric}</option>
+                    ))}
+                    {/* Show product's fabric type if it's not in the list */}
+                    {enquiryItem?.fabricType && 
+                     !fabricTypes.some(f => normalizeFabricType(f) === normalizeFabricType(enquiryItem.fabricType || '')) && (
+                      <option value={enquiryItem.fabricType}>{enquiryItem.fabricType}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Enquiry'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
