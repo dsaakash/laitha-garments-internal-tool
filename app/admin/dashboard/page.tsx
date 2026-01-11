@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/AdminLayout'
 import { Sale, SaleItem } from '@/lib/storage'
 import { format } from 'date-fns'
@@ -18,6 +19,9 @@ interface SoldItem {
 }
 
 export default function Dashboard() {
+  const router = useRouter()
+  const [userRole, setUserRole] = useState<'superadmin' | 'admin' | 'user' | null>(null)
+  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalInventory: 0,
     totalSales: 0,
@@ -29,7 +33,39 @@ export default function Dashboard() {
   const [recentSales, setRecentSales] = useState<Sale[]>([])
   const [soldItems, setSoldItems] = useState<SoldItem[]>([])
 
+  // Check user role on mount
   useEffect(() => {
+    fetch('/api/auth/check', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated && data.admin) {
+          let role = data.admin.role
+          if (!role) {
+            role = 'admin' // Default to admin if role missing
+          } else {
+            role = role.toLowerCase().trim()
+            if (role === 'super_admin') role = 'superadmin'
+          }
+          setUserRole(role as 'superadmin' | 'admin' | 'user')
+          
+          // Redirect users away from dashboard
+          if (role === 'user') {
+            router.push('/admin/products')
+            return
+          }
+        }
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error('Error checking user role:', err)
+        setLoading(false)
+      })
+  }, [router])
+
+  useEffect(() => {
+    // Only load dashboard data if user is admin or superadmin
+    if (userRole === 'user' || loading) return
+    
     const loadData = async () => {
       try {
         const [inventoryRes, salesRes] = await Promise.all([
@@ -105,7 +141,41 @@ export default function Dashboard() {
       }
     }
     loadData()
-  }, [])
+  }, [userRole, loading])
+
+  // Show loading state while checking role
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    )
+  }
+
+  // If user role is 'user', they shouldn't see this page (should be redirected)
+  if (userRole === 'user') {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600 mb-4">You don't have permission to access this page.</p>
+            <Link
+              href="/admin/products"
+              className="text-purple-600 hover:text-purple-700 font-medium"
+            >
+              Go to Products →
+            </Link>
+          </div>
+        </div>
+      </AdminLayout>
+    )
+  }
 
   const statCards = [
     {
