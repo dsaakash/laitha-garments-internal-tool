@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { PurchaseOrder, PurchaseOrderItem, Supplier } from '@/lib/storage'
 import { format } from 'date-fns'
@@ -45,6 +45,7 @@ export default function PurchasesPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [uploadingInvoice, setUploadingInvoice] = useState(false)
+  const invoiceFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadData()
@@ -1125,6 +1126,7 @@ export default function PurchasesPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Image (optional)</label>
                   <input
+                    ref={invoiceFileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={handleInvoiceUpload}
@@ -1136,18 +1138,27 @@ export default function PurchasesPage() {
                   )}
                   {formData.invoiceImage && (
                     <div className="mt-2">
-                      <img
-                        src={formData.invoiceImage}
-                        alt="Invoice"
-                        className="max-w-xs h-32 object-cover rounded border"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, invoiceImage: '' }))}
-                        className="mt-2 text-sm text-red-600 hover:text-red-700"
-                      >
-                        Remove Invoice
-                      </button>
+                      <div className="relative inline-block">
+                        <img
+                          src={formData.invoiceImage}
+                          alt="Invoice"
+                          className="max-w-xs h-32 object-cover rounded border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, invoiceImage: '' }))
+                            // Reset the file input
+                            if (invoiceFileInputRef.current) {
+                              invoiceFileInputRef.current.value = ''
+                            }
+                          }}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-sm flex items-center justify-center hover:bg-red-600 transition-colors"
+                          title="Remove Invoice"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
