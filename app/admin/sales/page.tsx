@@ -44,6 +44,51 @@ export default function SalesPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
+  const stopCamera = useCallback(() => {
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
+    } catch (error) {
+      console.error('Error stopping camera:', error)
+    }
+    setShowCamera(false)
+  }, [])
+
+  const resetForm = useCallback(() => {
+    setFormData({
+      date: format(new Date(), 'yyyy-MM-dd'),
+      partyName: '',
+      customerId: '',
+      billNumber: '',
+      paymentMode: 'Cash',
+      upiTransactionId: '',
+      saleImage: '',
+      items: [] as Array<{
+        inventoryId: string
+        size: string
+        quantity: number
+        usePerMeter: boolean
+        meters?: number
+      }>,
+      discountType: '' as '' | 'percentage' | 'rupees',
+      discountPercentage: 0,
+      discountAmount: 0,
+      gstType: '' as '' | 'percentage' | 'rupees',
+      gstPercentage: 0,
+      gstAmount: 0,
+    })
+    setUseCustomer(false)
+    setCapturedImage(null)
+    setShowCamera(false)
+    setSelectedSticker(null)
+    stopCamera()
+  }, [stopCamera])
+
   useEffect(() => {
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,21 +194,6 @@ export default function SalesPage() {
       alert('Unable to access camera. Please check permissions.')
     }
   }
-
-  const stopCamera = useCallback(() => {
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-        streamRef.current = null
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null
-      }
-    } catch (error) {
-      console.error('Error stopping camera:', error)
-    }
-    setShowCamera(false)
-  }, [])
 
   const captureImage = () => {
     if (videoRef.current && canvasRef.current) {
@@ -337,36 +367,6 @@ export default function SalesPage() {
       alert('Failed to save sale')
     }
   }
-
-  const resetForm = useCallback(() => {
-    setFormData({
-      date: format(new Date(), 'yyyy-MM-dd'),
-      partyName: '',
-      customerId: '',
-      billNumber: '',
-      paymentMode: 'Cash',
-      upiTransactionId: '',
-      saleImage: '',
-      items: [] as Array<{
-        inventoryId: string
-        size: string
-        quantity: number
-        usePerMeter: boolean
-        meters?: number
-      }>,
-      discountType: '' as '' | 'percentage' | 'rupees',
-      discountPercentage: 0,
-      discountAmount: 0,
-      gstType: '' as '' | 'percentage' | 'rupees',
-      gstPercentage: 0,
-      gstAmount: 0,
-    })
-    setUseCustomer(false)
-    setCapturedImage(null)
-    setShowCamera(false)
-    setSelectedSticker(null)
-    stopCamera()
-  }, [stopCamera])
 
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
