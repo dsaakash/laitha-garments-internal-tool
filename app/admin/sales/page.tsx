@@ -233,7 +233,7 @@ export default function SalesPage() {
 
   const addStickerToImage = (sticker: string) => {
     if (capturedImage) {
-      const img = new Image()
+      const img = new window.Image()
       img.onload = () => {
         if (canvasRef.current) {
           const canvas = canvasRef.current
