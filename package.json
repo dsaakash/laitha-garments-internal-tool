@@ -27,7 +27,12 @@
     "setup-env": "node scripts/setup-env.js",
     "migrate-roles": "node scripts/run-migration.js",
     "check-roles": "node scripts/check-admin-roles.js",
-    "check-users-table": "node scripts/check-users-table.js"
+    "check-users-table": "node scripts/check-users-table.js",
+    "fix-negative-stock": "node scripts/fix-negative-stock.js",
+    "reconcile-stock-pos": "node scripts/reconcile-stock-from-pos.js",
+    "check-po-inventory": "node scripts/check-po-vs-inventory.js",
+    "fix-po-matching": "node scripts/fix-po-inventory-matching.js",
+    "merge-duplicates": "node scripts/merge-duplicate-inventory.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

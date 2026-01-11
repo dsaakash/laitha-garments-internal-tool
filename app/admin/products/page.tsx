@@ -34,6 +34,21 @@ export default function ProductsPage() {
     loadData()
   }, [])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showDetailModal) {
+        setShowDetailModal(false)
+        setSelectedItem(null)
+      }
+    }
+
+    if (showDetailModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showDetailModal])
+
   const loadData = async () => {
     try {
       const [inventoryRes, businessRes] = await Promise.all([
@@ -270,7 +285,7 @@ export default function ProductsPage() {
                     
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                       <div>
-                        <span className="text-sm font-medium text-gray-500">Selling Price</span>
+                        <span className="text-sm font-medium text-gray-500">Price</span>
                         <p className="text-2xl font-bold text-purple-600">₹{selectedItem.sellingPrice}</p>
                       </div>
                       {selectedItem.currentStock !== undefined && (

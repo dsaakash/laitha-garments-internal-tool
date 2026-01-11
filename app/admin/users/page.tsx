@@ -18,6 +18,26 @@ export default function UsersPage() {
     loadUsers()
   }, [])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showModal) {
+        setShowModal(false)
+        setEditingUser(null)
+        setFormData({
+          email: '',
+          password: '',
+          name: '',
+        })
+      }
+    }
+
+    if (showModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal])
+
   const loadUsers = async () => {
     try {
       const response = await fetch('/api/users')

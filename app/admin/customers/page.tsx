@@ -19,6 +19,21 @@ export default function CustomersPage() {
     loadCustomers()
   }, [])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showModal) {
+        resetForm()
+        setShowModal(false)
+      }
+    }
+
+    if (showModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal])
+
   const loadCustomers = async () => {
     try {
       const response = await fetch('/api/customers')

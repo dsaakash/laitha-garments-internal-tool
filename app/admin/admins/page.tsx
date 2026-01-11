@@ -19,6 +19,27 @@ export default function AdminsPage() {
     loadAdmins()
   }, [])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showModal) {
+        setShowModal(false)
+        setEditingAdmin(null)
+        setFormData({
+          email: '',
+          password: '',
+          name: '',
+          role: 'admin',
+        })
+      }
+    }
+
+    if (showModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal])
+
   const loadAdmins = async () => {
     try {
       const response = await fetch('/api/admin')

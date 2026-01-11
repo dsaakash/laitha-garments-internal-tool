@@ -48,6 +48,29 @@ export default function SalesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showCamera) {
+          setShowCamera(false)
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop())
+            streamRef.current = null
+          }
+        } else if (showModal) {
+          setShowModal(false)
+          resetForm()
+        }
+      }
+    }
+
+    if (showModal || showCamera) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal, showCamera])
+
   useEffect(() => {
     loadSales()
     // eslint-disable-next-line react-hooks/exhaustive-deps

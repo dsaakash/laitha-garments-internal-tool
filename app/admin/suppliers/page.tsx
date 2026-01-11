@@ -31,6 +31,37 @@ export default function SuppliersPage() {
     loadSuppliers()
   }, [])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showDetailModal) {
+          setShowDetailModal(false)
+          setSelectedSupplier(null)
+        } else if (showModal) {
+          setShowModal(false)
+          setEditingSupplier(null)
+          setFormData({
+            name: '',
+            phone: '',
+            email: '',
+            address: '',
+            gstNumber: '',
+            gstPercentage: 0,
+            gstAmountRupees: 0,
+            gstType: 'percentage',
+            contacts: [],
+          })
+        }
+      }
+    }
+
+    if (showModal || showDetailModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal, showDetailModal])
+
   const loadSuppliers = async () => {
     try {
       const response = await fetch('/api/suppliers')

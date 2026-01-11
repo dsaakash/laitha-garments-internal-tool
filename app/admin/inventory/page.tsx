@@ -55,6 +55,49 @@ export default function InventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, supplierFilter])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showDetailModal) {
+          setShowDetailModal(false)
+          setSelectedItem(null)
+        } else if (showStockModal) {
+          setShowStockModal(false)
+          setStockFormData({ itemId: '', type: 'in', quantity: '', notes: '' })
+        } else if (showBulkStockModal) {
+          setShowBulkStockModal(false)
+          setBulkStockData([])
+        } else if (showModal) {
+          setShowModal(false)
+          setEditingItem(null)
+          setFormData({
+            dressName: '',
+            dressType: '',
+            dressCode: '',
+            sizes: '',
+            fabricType: '',
+            wholesalePrice: '',
+            sellingPrice: '',
+            pricingUnit: '',
+            pricePerPiece: '',
+            pricePerMeter: '',
+            imageUrl: '',
+            productImages: [],
+            supplierName: '',
+            supplierAddress: '',
+            supplierPhone: '',
+          })
+        }
+      }
+    }
+
+    if (showModal || showDetailModal || showStockModal || showBulkStockModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal, showDetailModal, showStockModal, showBulkStockModal])
+
   const loadItems = async () => {
     try {
       const url = supplierFilter && supplierFilter !== 'All' 

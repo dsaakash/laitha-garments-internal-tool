@@ -9,6 +9,29 @@ export default function HeroSection() {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-50 via-white to-primary-50/30 px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20 overflow-hidden">
+      {/* Header */}
+      <header className="absolute top-0 left-0 right-0 bg-white/80 backdrop-blur-md shadow-sm z-50 border-b border-cream-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <Link href="/" className="text-xl sm:text-2xl font-serif text-sage-800 font-semibold hover:text-primary-600 transition-colors">
+            Lalitha Garments
+          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/catalogue"
+              className="text-sm sm:text-base text-sage-600 hover:text-primary-600 transition-colors font-medium hidden sm:inline"
+            >
+              Catalogue
+            </Link>
+            <Link
+              href="/admin/login"
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium text-sm sm:text-base transition-colors shadow-md hover:shadow-lg"
+            >
+              Login
+            </Link>
+          </div>
+        </div>
+      </header>
+
       {/* Decorative elements */}
       <div className="absolute top-10 sm:top-20 left-5 sm:left-10 w-48 sm:w-72 h-48 sm:h-72 bg-primary-100/20 rounded-full blur-3xl"></div>
       <div className="absolute bottom-10 sm:bottom-20 right-5 sm:right-10 w-64 sm:w-96 h-64 sm:h-96 bg-sage-100/20 rounded-full blur-3xl"></div>

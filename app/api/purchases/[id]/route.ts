@@ -141,22 +141,36 @@ export async function PUT(
       )
       
       // Update inventory
-      const dressCode = `${item.productName}_${item.fabricType || 'standard'}`.replace(/\s+/g, '_').toUpperCase()
+      // Normalize product name: trim, remove extra spaces, standardize
+      const normalizedProductName = item.productName.trim().replace(/\s+/g, ' ')
+      const dressCode = `${normalizedProductName}_${item.fabricType || 'standard'}`.replace(/\s+/g, '_').toUpperCase()
       
-      // Try exact match first
+      // Try exact match first (by dress_code)
       let existingInventory = await query(
         'SELECT * FROM inventory WHERE dress_code = $1',
         [dressCode]
       )
       
-      // If no exact match, try fuzzy match by product name
+      // If no exact match, try normalized name match (normalize spaces in database too)
       if (existingInventory.rows.length === 0) {
+        const normalizedNameLower = normalizedProductName.toLowerCase()
         existingInventory = await query(
           `SELECT * FROM inventory 
-           WHERE LOWER(TRIM(dress_name)) = LOWER(TRIM($1))
-           OR LOWER(dress_code) LIKE LOWER($2)
+           WHERE LOWER(TRIM(REPLACE(dress_name, '  ', ' '))) = $1
+           AND (fabric_type = $2 OR (fabric_type IS NULL AND $2 = 'standard'))
            LIMIT 1`,
-          [item.productName, `%${item.productName.replace(/\s+/g, '_').toUpperCase()}%`]
+          [normalizedNameLower, item.fabricType || 'standard']
+        )
+      }
+      
+      // If still no match, try partial match on dress_code
+      if (existingInventory.rows.length === 0) {
+        const searchPattern = `%${normalizedProductName.replace(/\s+/g, '_').toUpperCase()}%`
+        existingInventory = await query(
+          `SELECT * FROM inventory 
+           WHERE LOWER(dress_code) LIKE LOWER($1)
+           LIMIT 1`,
+          [searchPattern]
         )
       }
       
@@ -188,18 +202,23 @@ export async function PUT(
         
         console.log(`📦 Updating stock for ${item.productName}: Change ${quantityDifference > 0 ? '+' : ''}${quantityDifference} units (Old PO: ${oldQuantity}, New PO: ${newPurchaseQuantity}, Stock: ${currentStock} → ${newCurrentStock})`)
         
+        // Update dress_code if it doesn't match (normalize it)
+        const updateDressCode = existing.dress_code !== dressCode ? dressCode : existing.dress_code
+        
         await query(
           `UPDATE inventory 
            SET sizes = $1, 
-               wholesale_price = $2, selling_price = $3,
-               fabric_type = COALESCE($4, fabric_type),
-               supplier_name = COALESCE($5, supplier_name),
-               quantity_in = $6,
-               current_stock = $7,
+               dress_code = $2,
+               wholesale_price = $3, selling_price = $4,
+               fabric_type = COALESCE($5, fabric_type),
+               supplier_name = COALESCE($6, supplier_name),
+               quantity_in = $7,
+               current_stock = $8,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $8`,
+           WHERE id = $9`,
           [
             mergedSizes,
+            updateDressCode,
             item.pricePerPiece,
             (parseFloat(item.pricePerPiece) * 2).toFixed(2),
             item.fabricType,

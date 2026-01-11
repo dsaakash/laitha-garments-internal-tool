@@ -56,6 +56,26 @@ export default function PurchasesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSupplier, filterCategory, filterMonth, filterYear])
 
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showDetailModal) {
+          setShowDetailModal(false)
+          setSelectedOrder(null)
+        } else if (showModal) {
+          setShowModal(false)
+          resetForm()
+        }
+      }
+    }
+
+    if (showModal || showDetailModal) {
+      window.addEventListener('keydown', handleEsc)
+      return () => window.removeEventListener('keydown', handleEsc)
+    }
+  }, [showModal, showDetailModal])
+
   const loadData = async () => {
     try {
       const [suppliersRes, ordersRes] = await Promise.all([
@@ -893,13 +913,6 @@ export default function PurchasesPage() {
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold">Products</h3>
-                    <button
-                      type="button"
-                      onClick={addItem}
-                      className="text-purple-600 hover:text-purple-700 text-sm font-medium"
-                    >
-                      + Add Product
-                    </button>
                   </div>
 
                   {items.map((item, index) => (
@@ -1171,23 +1184,33 @@ export default function PurchasesPage() {
                   />
                 </div>
 
-                <div className="flex justify-end space-x-4 pt-4">
+                <div className="flex justify-between items-center pt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowModal(false)
-                      resetForm()
-                    }}
-                    className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    onClick={addItem}
+                    className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
                   >
-                    Cancel
+                    <span>+</span>
+                    <span>Add Product</span>
                   </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    {editingOrder ? 'Update' : 'Add'} Order
-                  </button>
+                  <div className="flex space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModal(false)
+                        resetForm()
+                      }}
+                      className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                    >
+                      {editingOrder ? 'Update' : 'Add'} Order
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>

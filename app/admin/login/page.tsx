@@ -11,11 +11,29 @@ export default function AdminLogin() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
+  const [activeTab, setActiveTab] = useState<'admin' | 'user'>('admin')
 
   useEffect(() => {
     checkAuth().then((authenticated) => {
       if (authenticated) {
-        router.push('/admin/dashboard')
+        // Check user role to redirect appropriately
+        fetch('/api/auth/check', { credentials: 'include' })
+          .then(res => res.json())
+          .then(data => {
+            if (data.authenticated && data.admin) {
+              const role = (data.admin.role || 'admin').toLowerCase().trim()
+              if (role === 'user') {
+                router.push('/admin/products')
+              } else {
+                router.push('/admin/dashboard')
+              }
+            } else {
+              router.push('/admin/dashboard')
+            }
+          })
+          .catch(() => {
+            router.push('/admin/dashboard')
+          })
       } else {
         setChecking(false)
       }
@@ -30,7 +48,39 @@ export default function AdminLogin() {
     try {
       const result = await login(email, password)
       if (result.success) {
-        router.push('/admin/dashboard')
+        // Check user role to redirect appropriately
+        // If user tab is selected, try to verify it's actually a user
+        if (activeTab === 'user') {
+          // Verify the logged-in user is actually a user
+          const checkRes = await fetch('/api/auth/check', { credentials: 'include' })
+          const checkData = await checkRes.json()
+          if (checkData.authenticated && checkData.admin) {
+            const role = (checkData.admin.role || 'admin').toLowerCase().trim()
+            if (role === 'user') {
+              router.push('/admin/products')
+            } else {
+              setError('This account is not a user account. Please use the Admin tab.')
+              setLoading(false)
+              return
+            }
+          }
+        } else {
+          // Admin tab - check if it's actually an admin
+          const checkRes = await fetch('/api/auth/check', { credentials: 'include' })
+          const checkData = await checkRes.json()
+          if (checkData.authenticated && checkData.admin) {
+            const role = (checkData.admin.role || 'admin').toLowerCase().trim()
+            if (role === 'user') {
+              setError('This account is a user account. Please use the User tab.')
+              setLoading(false)
+              return
+            } else {
+              router.push('/admin/dashboard')
+            }
+          } else {
+            router.push('/admin/dashboard')
+          }
+        }
       } else {
         setError(result.message || 'Invalid credentials')
       }
@@ -57,11 +107,47 @@ export default function AdminLogin() {
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Admin Login
+            Login
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Lalitha Garments Admin Portal
+            Lalitha Garments Portal
           </p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('admin')
+              setError('')
+              setEmail('')
+              setPassword('')
+            }}
+            className={`flex-1 py-3 px-4 text-center font-medium text-sm transition-colors ${
+              activeTab === 'admin'
+                ? 'border-b-2 border-purple-600 text-purple-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            👑 Admin
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('user')
+              setError('')
+              setEmail('')
+              setPassword('')
+            }}
+            className={`flex-1 py-3 px-4 text-center font-medium text-sm transition-colors ${
+              activeTab === 'user'
+                ? 'border-b-2 border-purple-600 text-purple-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            👤 User
+          </button>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
@@ -110,7 +196,7 @@ export default function AdminLogin() {
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Signing in...' : `Sign in as ${activeTab === 'admin' ? 'Admin' : 'User'}`}
             </button>
           </div>
         </form>
