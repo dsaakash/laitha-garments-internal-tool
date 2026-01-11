@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import { PurchaseOrder, PurchaseOrderItem, Supplier } from '@/lib/storage'
 import { format } from 'date-fns'
@@ -804,17 +805,25 @@ export default function PurchasesPage() {
                 </div>
                 
                 {order.items && order.items.length > 0 && order.items[0].productImages && order.items[0].productImages.length > 0 ? (
-                  <img
-                    src={order.items[0].productImages[0]}
-                    alt={order.items[0].productName}
-                    className="w-full h-48 object-cover rounded-lg mb-4"
-                  />
+                  <div className="relative w-full h-48 mb-4">
+                    <Image
+                      src={order.items[0].productImages[0]}
+                      alt={order.items[0].productName}
+                      fill
+                      className="object-cover rounded-lg"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
                 ) : order.productImage ? (
-                  <img
-                    src={order.productImage}
-                    alt={order.productName || 'Product'}
-                    className="w-full h-48 object-cover rounded-lg mb-4"
-                  />
+                  <div className="relative w-full h-48 mb-4">
+                    <Image
+                      src={order.productImage}
+                      alt={order.productName || 'Product'}
+                      fill
+                      className="object-cover rounded-lg"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
                 ) : null}
                 
                 <div className="space-y-2 text-sm">
@@ -1020,16 +1029,18 @@ export default function PurchasesPage() {
                           {item.productImages && item.productImages.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-2">
                               {item.productImages.map((img, imgIndex) => (
-                                <div key={imgIndex} className="relative">
-                                  <img
+                                <div key={imgIndex} className="relative w-20 h-20">
+                                  <Image
                                     src={img}
                                     alt={`Product ${index + 1} - Image ${imgIndex + 1}`}
-                                    className="w-20 h-20 object-cover rounded border"
+                                    fill
+                                    className="object-cover rounded border"
+                                    sizes="80px"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => removeImage(index, imgIndex)}
-                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs z-10"
                                   >
                                     ×
                                   </button>
@@ -1138,26 +1149,30 @@ export default function PurchasesPage() {
                   )}
                   {formData.invoiceImage && (
                     <div className="mt-2">
-                      <div className="relative inline-block">
-                        <img
-                          src={formData.invoiceImage}
-                          alt="Invoice"
-                          className="max-w-xs h-32 object-cover rounded border"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({ ...prev, invoiceImage: '' }))
-                            // Reset the file input
-                            if (invoiceFileInputRef.current) {
-                              invoiceFileInputRef.current.value = ''
-                            }
-                          }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-sm flex items-center justify-center hover:bg-red-600 transition-colors"
-                          title="Remove Invoice"
-                        >
-                          ×
-                        </button>
+                      <div className="relative inline-block max-w-xs">
+                        <div className="relative w-full h-32">
+                          <Image
+                            src={formData.invoiceImage}
+                            alt="Invoice"
+                            fill
+                            className="object-cover rounded border"
+                            sizes="(max-width: 768px) 100vw, 384px"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, invoiceImage: '' }))
+                              // Reset the file input
+                              if (invoiceFileInputRef.current) {
+                                invoiceFileInputRef.current.value = ''
+                              }
+                            }}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-sm flex items-center justify-center hover:bg-red-600 transition-colors z-10"
+                            title="Remove Invoice"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1287,12 +1302,15 @@ export default function PurchasesPage() {
                         {item.productImages && item.productImages.length > 0 && (
                           <div className="flex gap-2 mb-2">
                             {item.productImages.map((img, imgIndex) => (
-                              <img
-                                key={imgIndex}
-                                src={img}
-                                alt={`${item.productName} - Image ${imgIndex + 1}`}
-                                className="w-24 h-24 object-cover rounded border"
-                              />
+                              <div key={imgIndex} className="relative w-24 h-24">
+                                <Image
+                                  src={img}
+                                  alt={`${item.productName} - Image ${imgIndex + 1}`}
+                                  fill
+                                  className="object-cover rounded border"
+                                  sizes="96px"
+                                />
+                              </div>
                             ))}
                           </div>
                         )}
@@ -1325,11 +1343,15 @@ export default function PurchasesPage() {
                   <div className="border rounded-lg p-4">
                     <h4 className="font-bold text-gray-900">{selectedOrder.productName || 'Product'}</h4>
                     {selectedOrder.productImage && (
-                      <img
-                        src={selectedOrder.productImage}
-                        alt={selectedOrder.productName}
-                        className="w-full h-64 object-cover rounded-lg my-4"
-                      />
+                      <div className="relative w-full h-64 my-4">
+                        <Image
+                          src={selectedOrder.productImage}
+                          alt={selectedOrder.productName || 'Product'}
+                          fill
+                          className="object-cover rounded-lg"
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                      </div>
                     )}
                     <div className="grid grid-cols-2 gap-2 text-sm mt-2">
                       <div>
@@ -1348,11 +1370,15 @@ export default function PurchasesPage() {
                 {selectedOrder.invoiceImage && (
                   <div>
                     <label className="text-sm font-medium text-gray-500 mb-2 block">Invoice</label>
-                    <img
-                      src={selectedOrder.invoiceImage}
-                      alt="Invoice"
-                      className="w-full max-w-md h-auto rounded-lg border"
-                    />
+                    <div className="relative w-full max-w-md aspect-auto">
+                      <Image
+                        src={selectedOrder.invoiceImage}
+                        alt="Invoice"
+                        fill
+                        className="object-contain rounded-lg border"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                      />
+                    </div>
                   </div>
                 )}
 

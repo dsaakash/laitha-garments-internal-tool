@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import { Sale, InventoryItem, Customer } from '@/lib/storage'
 import { format } from 'date-fns'
@@ -69,7 +70,7 @@ export default function SalesPage() {
       window.addEventListener('keydown', handleEsc)
       return () => window.removeEventListener('keydown', handleEsc)
     }
-  }, [showModal, showCamera])
+  }, [showModal, showCamera, resetForm])
 
   useEffect(() => {
     loadSales()
@@ -149,7 +150,7 @@ export default function SalesPage() {
     }
   }
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
@@ -162,7 +163,7 @@ export default function SalesPage() {
       console.error('Error stopping camera:', error)
     }
     setShowCamera(false)
-  }
+  }, [])
 
   const captureImage = () => {
     if (videoRef.current && canvasRef.current) {
@@ -337,7 +338,7 @@ export default function SalesPage() {
     }
   }
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({
       date: format(new Date(), 'yyyy-MM-dd'),
       partyName: '',
@@ -365,7 +366,7 @@ export default function SalesPage() {
     setShowCamera(false)
     setSelectedSticker(null)
     stopCamera()
-  }
+  }, [stopCamera])
 
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
@@ -501,11 +502,13 @@ export default function SalesPage() {
                           </svg>
                           <p className="text-sm font-semibold text-gray-700">Sale Proof Image</p>
                         </div>
-                        <div className="relative group">
-                          <img 
+                        <div className="relative group max-w-xs aspect-auto rounded-xl border-2 border-gray-200 shadow-md cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105 overflow-hidden">
+                          <Image 
                             src={sale.saleImage} 
                             alt="Sale proof" 
-                            className="max-w-xs rounded-xl border-2 border-gray-200 shadow-md cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
+                            fill
+                            className="object-contain"
+                            sizes="(max-width: 768px) 100vw, 384px"
                             onClick={() => window.open(sale.saleImage, '_blank')}
                           />
                           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-xl transition-all duration-200 flex items-center justify-center">
@@ -1057,11 +1060,13 @@ export default function SalesPage() {
                   <div className="space-y-4">
                     {capturedImage ? (
                       <div className="relative group">
-                        <div className="relative overflow-hidden rounded-xl border-2 border-gray-200 shadow-lg">
-                          <img 
+                        <div className="relative overflow-hidden rounded-xl border-2 border-gray-200 shadow-lg w-full aspect-auto max-h-96 bg-gray-50">
+                          <Image 
                             src={capturedImage} 
                             alt="Captured sale proof" 
-                            className="w-full h-auto max-h-96 object-contain bg-gray-50"
+                            fill
+                            className="object-contain"
+                            sizes="(max-width: 768px) 100vw, 50vw"
                           />
                           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
                             <button
