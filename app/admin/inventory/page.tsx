@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import { InventoryItem } from '@/lib/storage'
 import { format } from 'date-fns'
@@ -745,16 +746,20 @@ export default function InventoryPage() {
                               >
                                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                                   {(item.productImages && item.productImages.length > 0) || item.imageUrl ? (
-                                    <img 
-                                      src={item.productImages && item.productImages.length > 0 ? item.productImages[0] : item.imageUrl} 
-                                      alt={item.dressName} 
-                                      className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                                      onClick={() => {
-                                        setSelectedItem(item)
-                                        setShowDetailModal(true)
-                                      }}
-                                      title={item.productImages && item.productImages.length > 1 ? `${item.productImages.length} images` : ''}
-                                    />
+                                    <div className="relative w-12 h-12 sm:w-16 sm:h-16 cursor-pointer hover:opacity-80 transition-opacity">
+                                      <Image 
+                                        src={item.productImages && item.productImages.length > 0 ? item.productImages[0] : item.imageUrl || ''} 
+                                        alt={item.dressName} 
+                                        fill
+                                        className="object-cover rounded"
+                                        sizes="(max-width: 640px) 48px, 64px"
+                                        onClick={() => {
+                                          setSelectedItem(item)
+                                          setShowDetailModal(true)
+                                        }}
+                                        title={item.productImages && item.productImages.length > 1 ? `${item.productImages.length} images` : ''}
+                                      />
+                                    </div>
                                   ) : (
                                     <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
                                   )}
@@ -875,16 +880,20 @@ export default function InventoryPage() {
                     >
                       <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                         {(item.productImages && item.productImages.length > 0) || item.imageUrl ? (
-                          <img 
-                            src={item.productImages && item.productImages.length > 0 ? item.productImages[0] : item.imageUrl} 
-                            alt={item.dressName} 
-                            className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => {
-                              setSelectedItem(item)
-                              setShowDetailModal(true)
-                            }}
-                            title={item.productImages && item.productImages.length > 1 ? `${item.productImages.length} images` : ''}
-                          />
+                          <div className="relative w-12 h-12 sm:w-16 sm:h-16 cursor-pointer hover:opacity-80 transition-opacity">
+                            <Image 
+                              src={item.productImages && item.productImages.length > 0 ? item.productImages[0] : item.imageUrl || ''} 
+                              alt={item.dressName} 
+                              fill
+                              className="object-cover rounded"
+                              sizes="(max-width: 640px) 48px, 64px"
+                              onClick={() => {
+                                setSelectedItem(item)
+                                setShowDetailModal(true)
+                              }}
+                              title={item.productImages && item.productImages.length > 1 ? `${item.productImages.length} images` : ''}
+                            />
+                          </div>
                         ) : (
                           <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
                         )}
@@ -1152,11 +1161,13 @@ export default function InventoryPage() {
                     {previewImages.length > 0 && (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-2">
                         {previewImages.map((imageUrl, index) => (
-                          <div key={index} className="relative group">
-                            <img
+                          <div key={index} className="relative group w-full h-24">
+                            <Image
                               src={imageUrl}
                               alt={`Preview ${index + 1}`}
-                              className="w-full h-24 object-cover rounded border"
+                              fill
+                              className="object-cover rounded border"
+                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                             />
                             <button
                               type="button"
@@ -1266,11 +1277,13 @@ export default function InventoryPage() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {((selectedItem.productImages && selectedItem.productImages.length > 0) ? selectedItem.productImages : [selectedItem.imageUrl]).map((imageUrl, index) => (
-                          <div key={index} className="relative">
-                            <img
-                              src={imageUrl}
+                          <div key={index} className="relative w-full h-96">
+                            <Image
+                              src={imageUrl || ''}
                               alt={`${selectedItem.dressName} - Image ${index + 1}`}
-                              className="w-full h-96 object-cover rounded-lg border-2 border-gray-200"
+                              fill
+                              className="object-cover rounded-lg border-2 border-gray-200"
+                              sizes="(max-width: 640px) 100vw, 50vw"
                             />
                           </div>
                         ))}

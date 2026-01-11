@@ -22,6 +22,17 @@ interface BusinessProfile {
   whatsappNumber: string
 }
 
+// Helper function to normalize fabric type for matching
+const normalizeFabricType = (fabric: string): string => {
+  return fabric.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+// Common fabric types
+const fabricTypes = [
+  'Cotton', 'Mul Cotton', 'Silk', 'Georgette', 'Chiffon', 'Linen', 'Rayon', 
+  'Polyester', 'Crepe', 'Satin', 'Velvet', 'Denim', 'Other'
+]
+
 export default function ProductsPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,17 +49,6 @@ export default function ProductsPage() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [enquirySubmitted, setEnquirySubmitted] = useState(false)
-
-  // Helper function to normalize fabric type for matching
-  const normalizeFabricType = (fabric: string): string => {
-    return fabric.toLowerCase().trim().replace(/\s+/g, ' ')
-  }
-
-  // Common fabric types
-  const fabricTypes = [
-    'Cotton', 'Mul Cotton', 'Silk', 'Georgette', 'Chiffon', 'Linen', 'Rayon', 
-    'Polyester', 'Crepe', 'Satin', 'Velvet', 'Denim', 'Other'
-  ]
 
   // Reset form when enquiry modal closes and auto-select fabric type when opens
   useEffect(() => {
@@ -496,7 +496,7 @@ export default function ProductsPage() {
               
               {enquirySubmitted && (
                 <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-700 text-sm">✓ Enquiry submitted successfully! We'll contact you soon.</p>
+                  <p className="text-green-700 text-sm">✓ Enquiry submitted successfully! We&apos;ll contact you soon.</p>
                 </div>
               )}
 
