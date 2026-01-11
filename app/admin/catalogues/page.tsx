@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import { Catalogue, InventoryItem } from '@/lib/storage'
 
@@ -242,11 +243,15 @@ export default function CataloguesPage() {
                           }}
                         >
                           {item.imageUrl ? (
-                            <img
-                              src={item.imageUrl}
-                              alt={item.dressName}
-                              className="w-full h-24 object-cover rounded hover:opacity-80 transition-opacity"
-                            />
+                            <div className="relative w-full h-24">
+                              <Image
+                                src={item.imageUrl}
+                                alt={item.dressName}
+                                fill
+                                className="object-cover rounded hover:opacity-80 transition-opacity"
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                              />
+                            </div>
                           ) : (
                             <div className="w-full h-24 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">
                               No Image
@@ -314,11 +319,15 @@ export default function CataloguesPage() {
                               <span className="text-xs text-gray-500 ml-2">({item.dressCode})</span>
                             </div>
                             {item.imageUrl && (
-                              <img
-                                src={item.imageUrl}
-                                alt={item.dressName}
-                                className="w-12 h-12 object-cover rounded"
-                              />
+                              <div className="relative w-12 h-12">
+                                <Image
+                                  src={item.imageUrl}
+                                  alt={item.dressName}
+                                  fill
+                                  className="object-cover rounded"
+                                  sizes="48px"
+                                />
+                              </div>
                             )}
                           </label>
                         ))}
@@ -366,11 +375,13 @@ export default function CataloguesPage() {
               </div>
               <div className="grid grid-cols-2 gap-6">
                 {selectedItem.imageUrl && (
-                  <div>
-                    <img
+                  <div className="relative w-full aspect-auto">
+                    <Image
                       src={selectedItem.imageUrl}
                       alt={selectedItem.dressName}
-                      className="w-full rounded-lg"
+                      fill
+                      className="object-contain rounded-lg"
+                      sizes="(max-width: 768px) 100vw, 50vw"
                     />
                   </div>
                 )}

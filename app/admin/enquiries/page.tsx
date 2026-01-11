@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { format } from 'date-fns'
 
@@ -30,11 +30,7 @@ export default function EnquiriesPage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [updating, setUpdating] = useState(false)
 
-  useEffect(() => {
-    loadEnquiries()
-  }, [filterStatus])
-
-  const loadEnquiries = async () => {
+  const loadEnquiries = useCallback(async () => {
     try {
       const url = filterStatus 
         ? `/api/enquiries?status=${filterStatus}`
@@ -50,7 +46,11 @@ export default function EnquiriesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filterStatus])
+
+  useEffect(() => {
+    loadEnquiries()
+  }, [loadEnquiries])
 
   const handleStatusUpdate = async (id: number, status: string, notes?: string) => {
     setUpdating(true)
